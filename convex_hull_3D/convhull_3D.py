@@ -1,16 +1,15 @@
 import numpy as np
 
 
-class ConvSet:  # {{{
-    def __init__(self):  # {{{
+class ConvSet:
+    def __init__(self):
         """
         self.S = S
         self.dim = S.shape[1]
         assert self.dim == 3, "Only support  3D"
         """
-        # }}}
 
-    def quickhull(self, S):    # {{{
+    def quickhull(self, S):
         if S.shape[0] <= 4:
             return list(S)
 
@@ -48,11 +47,11 @@ class ConvSet:  # {{{
             assert Sk.size < S.size, msg # Which means there is a problem picking C or D
             conv_S += self.quickhull(Sk)
 
-        return conv_S   # }}}
+        return conv_S
 
-    def _maxdist(self, points):     # {{{
-        """
-        Find the two points with the greatest distance between them
+    def _maxdist(self, points):
+        """ Find the two points with the greatest distance between them
+
         """
 
         length = len(points)
@@ -64,28 +63,29 @@ class ConvSet:  # {{{
         assert abs((points[ind/length] - points[ind%length])).sum() == m.max()
 
         return points[ind/length], points[ind%length]
-        # }}}
 
-    def _maxdist_AB_test(self, a, b, c):    # {{{
+    def _maxdist_AB_test(self, a, b, c):
         """ Compute the distance from point c to the line between a and b """
 
         n_abc = np.cross(b - a, c - a)      # Normal to abc-plane
         n_ab = np.cross(b - a, n_abc - a)   # Normal to ab in abc-plane
         return np.dot(c - a, n_ab)          # Orthogonal coponent of c
-        # }}}
 
-    def _maxdist_ABC(self, a, b, c, S):     # {{{
+    def _maxdist_ABC(self, a, b, c, S):
         """ In the set S, find the point most distant to the plane defined by a, b, c """
         n = np.cross(a, np.cross(b, c))
         # Plane is defied by a and n
 
         dist = np.abs(np.dot(S - a, n))
-        return S[np.argmax(dist)]
-        # }}}
+        point = S[np.argmax(dist)]
+        for p in (a, b, c):
+        assert (point =! a).any()
+        assert (point =! b).any()
+        assert (point =! c).any()
+        return point
 
-    def _order_facets(self, a, b, c, d):    # {{{
-        """
-        return ordered list of a, b, c, d such that
+    def _order_facets(self, a, b, c, d):
+        """ return ordered list of a, b, c, d such that
         np.dot(d, np.cross(a, np.cross(b, c)))
         """
         direction = np.dot(d, np.cross(a, np.cross(b, c)))
@@ -93,9 +93,8 @@ class ConvSet:  # {{{
             return [a, b, c, d]
         else:
             return [a, c, b, d]
-        # }}}
 
-    def _maxdist_AB(self, a, b, c):    # {{{
+    def _maxdist_AB(self, a, b, c):
         """ Compute the distance from point c to the line between a and b """
         assert isinstance(c, np.ndarray)
 
@@ -105,11 +104,9 @@ class ConvSet:  # {{{
         n_ab = np.cross(b - a, n_abc)               # Normal to ab in abc-plane
         dist = np.einsum("ij, ij->i", c, n_ab)      # TODO: What does this really do?
         C = c[np.argmax(np.abs(dist))]
-        assert (C != a).all()
-        assert (C != b).all()
+        assert (C != a).any()
+        assert (C != b).any()
         return c[np.argmax(np.abs(dist))]
-        # }}}
-    # }}}
 
 
 if __name__ == "__main__":
