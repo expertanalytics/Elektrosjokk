@@ -1,6 +1,7 @@
-from convhull_3D import ConvSet
+from convhull_3D import ConvHull
 import pytest
 import numpy as np
+import scipy.spatial
 
 
 def test_maxdist(S, cv):
@@ -20,29 +21,58 @@ def test_maxdist_AB(S, cv):
     B = np.array([2, -1, 0])
     cC = cv._maxdist_AB(A, B, S)
 
-    C = np.array([0, 1, 0])
+    C = np.array([0, 2, 0])
     assert (cC == C).all()
 
 def test_maxdist_ABC(S, cv):
     A = np.array([-2, -1, 0])
     B = np.array([2, -1, 0])
-    C = np.array([0, 1, 0])
+    C = np.array([0, 2, 0])
     D = np.array([0, 0, 1])
 
     cD = cv._maxdist_ABC(A, B, C, S)
     assert (cD == D).all()
 
 def test_order_facets(S, cv):
-    pass
+    # Give order_facets a list which will return negative and expect positive
+    # Give order_facets a list which will return positive and expect positive
+    # Give lots of random lists
+
+    A = np.array([-2, -1, 0])
+    B = np.array([2, -1, 0])
+    C = np.array([0, 2, 0])
+    D = np.array([0, 0, 1])
+
+    facets = np.array([[A, C, B, D],
+                       [A, B, D, C],
+                       [B, C, D, A],
+                       [A, D, C, B]])
+
+    new_facets = np.array([cv._order_facets(*points) for points in facets])
+    assert (new_facets == facets).all()
+    """
+    for i in xrange(4):
+        print facets[i]
+        print new_facets[i]
+        print
+    """
+
+def test_equal_scipy(cv, S):
+    """ lazy. Test sim of sets are equal """
+    myresult = cv.quickhull(S)
+    hull = scipy.spatial.ConvexHull(S)
+    scipyresult = S[hull.vertices]
+    assert np.sum(myresult) == np.sum(scipyresult)
+
 
 @pytest.fixture(scope="module")
 def S():
     """ Return test data set, but is it a good test set?
     """
-    N = 100
+    N = 10
     A = [-2, -1, 0]
     B = [2, -1, 0]
-    C = [0, 1, 0]
+    C = [0, 2, 0]
     D = [0, 0, 1]
     extremals = np.array([A, B, C, D])
 
@@ -69,9 +99,8 @@ def S():
 
 @pytest.fixture(scope="module")
 def cv():
-    return ConvSet()
+    return ConvHull()
 
 
 if __name__ == "__main__":
-    S()
-    test_maxdist(S(), cv())
+    test_order_facets(S(), cv())
