@@ -1,4 +1,3 @@
-from dolfin import Mesh, BoundaryMesh
 import numpy as np
 import scipy.spatial
 from timeit import default_timer as timer
@@ -145,22 +144,10 @@ class BrainConvexHull:
         return tree.query(scaled_hull_points, k=1)[0]   # Returns tuple(distance, index)
 
 
-def save_bmesh_coordinates(fname="test_surface.xml"):
-    """ Read dolfin-mesh and save coordinates as numpy arra
-
-    Parameters
-    ----------
-    fname : String
-            The name of the mesh to read, including file extension
-    """
-    mesh = Mesh(fname)
-    bmesh = BoundaryMesh(mesh, "exterior")
-    np.save("test", bmesh.coordinates())
-
-
 if __name__ == "__main__":
-    points = np.load("test.npy")
+    points = np.load("bmesh_array.npy")
     bch = BrainConvexHull(points)
     hull_points = bch.compute_hull()
     scaled_hull = bch.scale_hull(hull_points, 1.1)
     bch.compute_distance_to_brain(scaled_hull)
+    bch.make_mesh(scaled_hull, "brain_hull")
