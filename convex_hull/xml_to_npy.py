@@ -11,4 +11,6 @@ def save_bmesh_coordinates(fname="test_surface.xml"):
     """
     mesh = Mesh(fname)
     bmesh = BoundaryMesh(mesh, "exterior")
-    np.save("test", bmesh.coordinates())
+    basename = fmane.split(".")[0]
+    np.save("{}_points".format(basename), bmesh.coordinates())
+    np.save("{}_simplices".format(basename), bmesh.cells())
