@@ -2,11 +2,8 @@ from dolfin import Mesh, BoundaryMesh
 import numpy as np
 import scipy.spatial
 from timeit import default_timer as timer
+import pymesh
 
-try:
-    from stl import mesh
-except:
-    print "Failed to import numpy-stl"
 
 class BrainConvexHull:
     """
@@ -114,25 +111,6 @@ class BrainConvexHull:
 
         return new_points
 
-    def make_mesh(self, hull_points, meshname):
-        """ Write a list of facets to stl
-
-        Parameters
-        ----------
-        hull_points : array_like
-                      The coordinates of the mesh surface
-        meshname    : String
-                      The basename of the mesh file
-        """
-
-        # use ConvexHull to triangulate the surface.
-        surf_tri = scipy.spatial.ConvexHull(hull_points)
-
-        cube = mesh.Mesh(np.zeros(surf_tri.simplices.shape[0], dtype=mesh.Mesh.dtype))
-        cube.vectors[:] = hull_points[surf_tri.simplices]
-
-        cube.save("{}.stl".format(meshname))
-
     def compute_distance_to_brain(self, scaled_hull_points):
         """ Compute the minimum distance from each point in scale_hull_points to self.brain_points
 
@@ -145,22 +123,11 @@ class BrainConvexHull:
         return tree.query(scaled_hull_points, k=1)[0]   # Returns tuple(distance, index)
 
 
-def save_bmesh_coordinates(fname="test_surface.xml"):
-    """ Read dolfin-mesh and save coordinates as numpy arra
-
-    Parameters
-    ----------
-    fname : String
-            The name of the mesh to read, including file extension
-    """
-    mesh = Mesh(fname)
-    bmesh = BoundaryMesh(mesh, "exterior")
-    np.save("test", bmesh.coordinates())
-
 
 if __name__ == "__main__":
-    points = np.load("test.npy")
+    points = np.load("surface_points.npy")
     bch = BrainConvexHull(points)
     hull_points = bch.compute_hull()
     scaled_hull = bch.scale_hull(hull_points, 1.1)
     bch.compute_distance_to_brain(scaled_hull)
+    bch.make_mesh(scaled_hull, "test")

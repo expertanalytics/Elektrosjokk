@@ -68,7 +68,7 @@ class AdEx_problem:
         dolfin.Expression
             Time dependent expression for the input current
         """
-        return Expression("1", t=0)
+        return Expression("1", t=0, degree=1)
 
 class AdEx_solver:
     def __init__(self, problem, dt, T):
@@ -99,7 +99,7 @@ class AdEx_solver:
         I = self.problem.ionic_current()   # FIXME: What should this be?
 
         V = FunctionSpace(self.problem.mesh, family, degree)
-        W = V*V
+        W = MixedFunctionSpace([V, V])
 
         v, w = TrialFunctions(W)
         p, q = TestFunctions(W)
