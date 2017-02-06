@@ -87,3 +87,15 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# Meshes
+.h5
+.xdmf
+.tar.gz
+.avi
+.xml
+/fou
+/fou2
+/Elektrosjokk_meshes
+*.npy
+*.pyc
