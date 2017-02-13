@@ -99,3 +99,13 @@ ENV/
 /Elektrosjokk_meshes
 *.npy
 *.pyc
+*.stl
+*.xml
+*.pvd
+*.vtu
+*.h5
+tmp.*
+
+/kent-and-meshes
+/Results
+

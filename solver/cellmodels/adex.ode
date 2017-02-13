@@ -1,0 +1,144 @@
+states("Membrane",
+        V = ScalarParam(-70.6, unit="mV"))
+
+parameters("Membrane",
+        C       = ScalarParam(281.0, unit="pF"),
+        g_L     = ScalarParam(30.0, unit="nS"), 
+        E_L     = ScalarParam(-70.6, unit="mV"),
+        V_T     = ScalarParam(-50.4, unit="mV"),
+        Delta_T = ScalarParam(2.0, unit="mV"))
+
+states("Adaptation",
+        w = ScalarParam(0, unit="nA"))
+
+parameters("Adaptation", 
+        a =     ScalarParam(4.0, unit="nS"),
+        b =     ScalarParam(0.085, unit="nA"),
+        E_L =   ScalarParam(-70.6, unit="mV"),
+        tau_w = ScalarParam(144.0, unit="mS"))
+
+expressions("Membrane")
+dV_dt = 1/C*(g_L*exp((V - V_T)/Delta_T) - g_L*(V - V_T) - w)
+
+expressions("Adaaptation")
+dw_dt = 
+
+        return 1./tau_w*(a*(V - E_L) - w)
+
+
+expressions("p")
+p = Conditional(Lt((V-V_0)/(V_fi - V_0), u_c), 0, 1)
+
+expressions("q")
+q = Conditional(Lt((V-V_0)/(V_fi - V_0), u_v), 0, 1)
+
+expressions("Fast inward current")
+tau_d = Cm/g_fi_max # ms
+J_fi = -v*p*(1 - (V-V_0)/(V_fi - V_0))*((V-V_0)/(V_fi - V_0) - u_c)/tau_d # ms**-1
+
+expressions("Fast inward current", "v gate")
+tau_v_minus = q*tau_v1_minus + (1 - q)*tau_v2_minus # ms
+dv_dt = (1 - p)*(1 - v)/tau_v_minus - p*v/tau_v_plus
+
+expressions("Slow outward current")
+J_so = (V-V_0)/(V_fi - V_0)*(1 - p)/tau_0 + p/tau_r # ms**-1
+
+expressions("Slow inward current")
+J_si = -w*(1 + tanh(k*((V-V_0)/(V_fi - V_0) - u_csi)))/(2*tau_si) # ms**-1
+
+expressions("Slow inward current", "w gate")
+dw_dt = (1 - p)*(1 - w)/tau_w_minus - p*w/tau_w_plus
+
+expressions("Stimulus protocol")
+cond1=And(Ge(time, IstimStart), Le(time, IstimEnd))
+#cond2=And(Le(time - IstimStart - floor((time - IstimStart)/IstimPeriod)*IstimPeriod, IstimPulseDuration))			       
+#J_stim = Conditional(And(cond1, cond2, ), IstimAmplitude, 0) # ms**-1
+J_stim=0
+
+expressions("Membrane")
+dV_dt =-(V_fi - V_0)*(J_fi + J_so + J_si + J_stim)
+
+
+parameters("C",
+           u_c = 0.13)
+
+parameters("q",
+           u_v = 0.04)
+
+parameters("Fast inward current",
+           g_fi_max = ScalarParam(4, unit="mS*cm**-2"))
+
+states("Fast inward current", "v gate",
+       v = 1)
+
+parameters("Fast inward current", "v gate",
+           tau_v1_minus = ScalarParam(1250, unit="ms"),
+           tau_v2_minus = ScalarParam(19.6, unit="ms"),
+           tau_v_plus = ScalarParam(3.33, unit="ms"))
+
+parameters("Slow outward current",
+           tau_0 = ScalarParam(12.5, unit="ms"),
+           tau_r = ScalarParam(33.33, unit="ms"))
+
+parameters("Slow inward current",
+           tau_si = ScalarParam(29, unit="ms"),
+           u_csi = 0.85,
+           k = 10)
+
+states("Slow inward current", "w gate",
+       w = 1)
+
+parameters("Slow inward current", "w gate",
+           tau_w_minus = ScalarParam(41, unit="ms"),
+           tau_w_plus = ScalarParam(870, unit="ms"))
+
+parameters("Stimulus protocol",
+           IstimStart = ScalarParam(10, unit="ms"),
+           IstimEnd = ScalarParam(50000, unit="ms"),
+           IstimAmplitude = ScalarParam(-0.2, unit="ms**-1"),
+           IstimPeriod = ScalarParam(1000, unit="ms"),
+           IstimPulseDuration = ScalarParam(1, unit="ms"))
+
+states("Membrane",
+       V =ScalarParam(-85, unit="mV" ))
+
+parameters("Membrane",
+           Cm = ScalarParam(1, unit="uF*cm**-2"),
+           V_0 = ScalarParam(-85, unit="mV"),
+           V_fi = ScalarParam(15, unit="mV"))
+
+
+
+
+
+expressions("p")
+p = Conditional(Lt((V-V_0)/(V_fi - V_0), u_c), 0, 1)
+
+expressions("q")
+q = Conditional(Lt((V-V_0)/(V_fi - V_0), u_v), 0, 1)
+
+expressions("Fast inward current")
+tau_d = Cm/g_fi_max # ms
+J_fi = -v*p*(1 - (V-V_0)/(V_fi - V_0))*((V-V_0)/(V_fi - V_0) - u_c)/tau_d # ms**-1
+
+expressions("Fast inward current", "v gate")
+tau_v_minus = q*tau_v1_minus + (1 - q)*tau_v2_minus # ms
+dv_dt = (1 - p)*(1 - v)/tau_v_minus - p*v/tau_v_plus
+
+expressions("Slow outward current")
+J_so = (V-V_0)/(V_fi - V_0)*(1 - p)/tau_0 + p/tau_r # ms**-1
+
+expressions("Slow inward current")
+J_si = -w*(1 + tanh(k*((V-V_0)/(V_fi - V_0) - u_csi)))/(2*tau_si) # ms**-1
+
+expressions("Slow inward current", "w gate")
+dw_dt = (1 - p)*(1 - w)/tau_w_minus - p*w/tau_w_plus
+
+expressions("Stimulus protocol")
+cond1=And(Ge(time, IstimStart), Le(time, IstimEnd))
+#cond2=And(Le(time - IstimStart - floor((time - IstimStart)/IstimPeriod)*IstimPeriod, IstimPulseDuration))			       
+#J_stim = Conditional(And(cond1, cond2, ), IstimAmplitude, 0) # ms**-1
+J_stim=0
+
+expressions("Membrane")
+dV_dt =-(V_fi - V_0)*(J_fi + J_so + J_si + J_stim)

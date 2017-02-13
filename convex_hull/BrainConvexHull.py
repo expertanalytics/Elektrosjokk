@@ -1,8 +1,7 @@
+from timeit import default_timer as timer
 from dolfin import Mesh, BoundaryMesh
 import numpy as np
 import scipy.spatial
-from timeit import default_timer as timer
-import pymesh
 
 
 class BrainConvexHull:
@@ -42,7 +41,6 @@ class BrainConvexHull:
         numpy.ndarray
             The vertices forming the convex hull of `self.brain_points`
         """
-
         hull = scipy.spatial.ConvexHull(self.brain_points)
         return self.brain_points[hull.vertices]
 
@@ -57,7 +55,6 @@ class BrainConvexHull:
         dist                : int or float
         number_of_simplices : int
         """
-
         assert abs(np.linalg.norm(n) - 1.0) < 1e-15
         point += n*float(dist)/number_of_simplices
 
@@ -76,7 +73,6 @@ class BrainConvexHull:
         numpy.ndarray
             A translated copy of `hull_coordinates`
         """
-
         # Compute convex hull for triangulation
         hull = scipy.spatial.ConvexHull(hull_coordinates)
         face_indices = hull.simplices
@@ -123,11 +119,9 @@ class BrainConvexHull:
         return tree.query(scaled_hull_points, k=1)[0]   # Returns tuple(distance, index)
 
 
-
 if __name__ == "__main__":
     points = np.load("surface_points.npy")
     bch = BrainConvexHull(points)
     hull_points = bch.compute_hull()
     scaled_hull = bch.scale_hull(hull_points, 1.1)
     bch.compute_distance_to_brain(scaled_hull)
-    bch.make_mesh(scaled_hull, "test")
