@@ -49,10 +49,8 @@ def setup_conductivities():
     extracellular = ExtracellularConductivity(degree=1)
     water = Water(degree=1)
 
-    M_i = {1: intracellular, 2: intracellular*1e-1}
+    M_i = {1: intracellular, 2: intracellular*1e-5}
     M_e = {1: extracellular, 2: water}
-    #M_i = intracellular
-    #M_e = extracellular
 
     return M_i, M_e
 
@@ -72,11 +70,11 @@ def setup_cell_model(application_parameters):
     return AdExManual(params=params)
 
 
-def setup_cardiac_model(application_parameters):
+def setup_brain_model(application_parameters):
     # Initialize the computational domain in time and space
     time = Constant(0.0)
     mesh = Mesh()
-    hdf = HDF5File(mesh.mpi_comm(), "../../convex_hull/brain.h5", "r")
+    hdf = HDF5File(mesh.mpi_comm(), "../convex_hull/brain.h5", "r")
     hdf.read(mesh, "/mesh", False)
 
     facet_domains = FacetFunction("size_t", mesh)
@@ -96,11 +94,11 @@ def setup_cardiac_model(application_parameters):
     #pulse = Expression("10*t*x[0]", t=time, degree=1)
     pulse = get_shock()
 
-    # Initialize cardiac model with the above input
+    # Initialize brain model with the above input
     args = (mesh, time, M_i, M_e, cell_model)
     kwargs = {"stimulus" : pulse, "cell_domains" : cell_domains, "facet_domains" : facet_domains}
     #kwargs = {"stimulus" : pulse}
-    heart = CardiacModel(*args, **kwargs)
+    heart = BrainModel(*args, **kwargs)
     return heart
 
 
@@ -108,7 +106,7 @@ def main():
     application_parameters = setup_application_parameters()
     setup_general_parameters()
 
-    brain = setup_cardiac_model(application_parameters)
+    brain = setup_brain_model(application_parameters)
 
     # Extract end time and time-step from application parameters
     T = application_parameters["T"]
@@ -116,7 +114,7 @@ def main():
 
     splitting_solver_params = SplittingSolver.default_parameters()
     splitting_solver_params["theta"] = 0.5
-    splitting_solver_params["CardiacODESolver"]["scheme"] = "GRL1"   # TODO: what is this
+    splitting_solver_params["BrainODESolver"]["scheme"] = "GRL1"   # TODO: what is this
 
     splitting_solver_params["pde_solver"] = "bidomain"
     #splitting_solver_params["BidomainSolver"]["linear_solver_type"] = "direct"
@@ -136,17 +134,17 @@ def main():
 
     # Set-up PostProcessor
 
-    pp = PostProcessor(dict(casedir="Results", clean_casedir=True))
-    pp.store_mesh(brain.domain())
-    pp.store_params(dict(application_parameters))
+    postprocessor = PostProcessor(dict(casedir="Results", clean_casedir=True))
+    postprocessor.store_mesh(brain.domain())
+    postprocessor.store_params(dict(application_parameters))
 
     solution_field_params = dict(save=True,
                                  save_as=["hdf5", "xdmf"],
                                  plot=False,
                                 )
 
-    pp.add_field(SolutionField("v", solution_field_params))
-    pp.add_field(SolutionField("u", solution_field_params))
+    postprocessor.add_field(SolutionField("v", solution_field_params))
+    postprocessor.add_field(SolutionField("u", solution_field_params))
 
     theta = splitting_solver_params["theta"]
     for i, (timestep, fields) in enumerate(solutions):
@@ -154,9 +152,10 @@ def main():
         (vs_, vs, vur) = fields
         v, u = vu.split(deepcopy=True)
 
-        pp.update_all({"v": lambda: v, "u" : lambda: u}, t0 + theta*(t1 - t0), i)
+        postprocessor.update_all({"v": lambda: v, "u" : lambda: u}, 
+                                  t0 + theta*(t1 - t0), i)
 
-    pp.finalize_all()
+    postprocessor.finalize_all()
     return solver
 
 

@@ -8,7 +8,7 @@ class shock3D(Expression):
 
     def eval(self, value, x): 
         if self.t <= 0.1: 
-            value[0] = exp(-100*pow(x[0] - 34.6, 2))*exp(-100*pow(x[1] - 0.28, 2))*
+            value[0] = exp(-100*pow(x[0] - 34.6, 2))*exp(-100*pow(x[1] - 0.28, 2))*\
             exp(-100*pow(x[2] - 87.0))
         else: 
             value[0] = 0     

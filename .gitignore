@@ -104,5 +104,8 @@ ENV/
 *.pvd
 *.vtu
 *.h5
+tmp.*
 
 /kent-and-meshes
+/Results
+
