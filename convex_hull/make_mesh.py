@@ -7,24 +7,26 @@ import subprocess
 import os
 
 
-def make_surface_meshes(path, brain_name):
+def make_surface_meshes(path, input_name, output_name):
     """ Create brain mesh with translated convex hull with subdomains
 
     Parameters
     ----------
     path : str
         Path to input brain mesh
-    brain_name : str
-        Base name for input and output files
+    input_name : str
+        Base name for input files
+    outpu_name : str
+        Base name for output files
     """
 
-    brain_mesh = Mesh("{path}/{name}.xml".format(**{"path" : path, "name" : brain_name}))
+    brain_mesh = Mesh("{path}/{name}.xml".format(**{"path" : path, "name" : input_name}))
     brain_bmesh = BoundaryMesh(brain_mesh, "exterior")
     brain_surface_points = brain_bmesh.coordinates()        # Get coordinates in the surface
     brain_surface_simplices = brain_bmesh.cells()           # Get xml mesh connectivity
     brain_mesh = make_pymesh(brain_surface_points, brain_surface_simplices)
-    save_mesh(brain_mesh, brain_name)                       # save brain surface as stl
-    assert os.path.exists("{}.stl".format(brain_name)), "Failed to save inner brain stl"
+    save_mesh(brain_mesh, output_name)                      # save brain surface as stl
+    assert os.path.exists("{}.stl".format(output_name)), "Failed to save inner brain stl"
 
     bch = BrainConvexHull(brain_surface_points)
     convex_hull_points = bch.compute_hull()                 # Compute convex hull of brain surface
@@ -32,8 +34,8 @@ def make_surface_meshes(path, brain_name):
     convex_hull_mesh = make_pymesh(scaled_hull_points)        # Use scipy to triangulate surface
     convex_hull_mesh = remesh(convex_hull_mesh, 1.0)        # remesh
 
-    save_mesh(convex_hull_mesh, "convex_{}".format(brain_name))     # save as stl
-    assert os.path.exists("convex_{}.stl".format(brain_name))
+    save_mesh(convex_hull_mesh, "convex_{}".format(output_name))     # save as stl
+    assert os.path.exists("convex_{}.stl".format(output_name))
 
 
 def make_volume_mesh(brain_name):
@@ -110,6 +112,48 @@ def clean(brain_name, tmp_name="tmp"):
     subprocess.check_output(cmd, shell=True)
 
 
+def test_subdomains(path, brain_name, hull_name):
+    """ But I use the hdf5 files for everything!
+    """
+    brain_mesh = Mesh("{0}/{1}.xml".format(path, brain_name))
+    hull_mesh = Mesh("{}.xml".format(hull_name))
+    facets = MeshFunction("size_t", hull_mesh, "{}_facet_region.xml".format(hull_name))
+    cells = MeshFunction("size_t", hull_mesh, "{}_physical_region.xml".format(hull_name))
+
+    brain_ds = Measure("ds", domain=brain_mesh)
+    brain_dx = Measure("dx", domain=brain_mesh)
+    original_volume = assemble(Constant(1)*brain_dx())
+    original_surface = assemble(Constant(1)*brain_ds())
+
+    hull_ds = Measure("ds", domain=hull_mesh, subdomain_data=facets)
+    hull_brain_dS = Measure("dS", domain=hull_mesh, subdomain_data=facets)
+    hull_dx = Measure("dx", domain=hull_mesh, subdomain_data=cells)
+    hull_brain_volume = assemble(Constant(1)*hull_dx(1))
+    hull_water_volume = assemble(Constant(1)*hull_dx(2))
+    hull_brainsurface0 = assemble(Constant(1)*hull_brain_dS(0))
+    hull_brainsurface1 = assemble(Constant(1)*hull_brain_dS(1))
+    hull_brainsurface2 = assemble(Constant(1)*hull_ds(2))
+
+    print set(cells.array())
+    print set(facets.array())
+
+    print "Original brain"
+    print "volume: ", original_volume
+    print "surface: ", original_surface
+    print
+    print "Hull brain"
+    print "brain volume: ", hull_brain_volume
+    print "water volume: ", hull_water_volume
+    print "brain surface0: ", hull_brainsurface0
+    print "brain surface1: ", hull_brainsurface1
+    print "brain surface2: ", hull_brainsurface2
+
+    #print hull_brain_volume - original_volume
+    #assert hull_water_volume > 0
+    #assert hull_brain_volume > 0
+    #print hull_brainsurface - priginal_surface
+
+
 def test_poisson(brain_name):
     mesh = Mesh()
     hdf5_file = HDF5File(mesh.mpi_comm(), "{}.h5".format(brain_name), "r")
@@ -128,7 +172,7 @@ def test_poisson(brain_name):
     v = TestFunction(V)
 
     # Boundary condition on exterior boundary
-    assert set(domains.array()) == set([7, 8])
+    assert set(domains.array()) == set([1, 2])
     assert set(boundaries.array()) == set([0, 1, 2])
 
     bcs = DirichletBC(V, Constant(0), boundaries, 2)
@@ -138,8 +182,8 @@ def test_poisson(brain_name):
     print assemble(Constant(1)*dx(7))
     print assemble(Constant(1)*dx(8))
 
-    F = inner(grad(u), grad(v))*dx(7) + inner(grad(u), grad(v))*dx(8) \
-        - Constant(1)*v*dx(7) - Constant(2)*v*dx(8)
+    F = inner(grad(u), grad(v))*dx(1) + inner(grad(u), grad(v))*dx(2) \
+        - Constant(1)*v*dx(1) - Constant(2)*v*dx(2)
 
     a = lhs(F)
     L = rhs(F)
@@ -152,16 +196,19 @@ def test_poisson(brain_name):
 
 
 if __name__ == "__main__":
-    name = "erika_res32"
-    make_surface_meshes("../kent-and-meshes", name)
+    path = "../kent-and-meshes"
+    input_name = "erika_res32"
+    output_name = "brain"
+    make_surface_meshes(path, input_name, output_name)
     print "made surfaces"
 
-    make_volume_mesh(name)
+    make_volume_mesh(output_name)
     print "made volume"
 
-    make_hdf5(name)
+    test_subdomains(path, input_name, output_name)
+    make_hdf5(output_name)
     print "made hdf5"
 
     print "running poisson"
-    test_poisson(name)
-    clean(name)
+    test_poisson(output_name)
+    #clean(output_name)

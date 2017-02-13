@@ -13,5 +13,5 @@ Physical Surface(2) = {2};
 Volume(5) = {1};
 Volume(6) = {1, 2};
 
-Physical Volume(7) = {5};
-Physical Volume(8) = {6};
+Physical Volume(1) = {5};
+Physical Volume(2) = {6};
