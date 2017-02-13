@@ -1,11 +1,10 @@
 import pytest
 import numpy as np
-import scipy.spatial
-from read_brain import BrainConvexHull
+from BrainConvexHull import BrainConvexHull
 
 
 def test_scale_hull(bch):
-    """ Assert that each point in the hull is moved away from the centre. I dont't know by how much,
+    """Assert that each point in the hull is moved away from the centre. I dont't know by how much,
     as it is each facet which is moved.
     """
     delta = 1.1     # Distance to move each point
@@ -36,8 +35,7 @@ def test_move_point(bch):
     assert np.linalg.norm(p1 - expected) < 1e-15
 
 
-def test_compute_distance_to_brain(S):
-    bch = BrainConvexHull(S)
+def test_compute_distance_to_brain(bch):
     delta = 1.1     # Distance to move each point
 
     computed = bch.compute_distance_to_brain(S*delta)

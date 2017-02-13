@@ -1,10 +1,8 @@
 import pymesh
-import numpy as np
-from numpy.linalg import norm
 
 
 def remesh(mesh, target_length, preserve_features=False, abs_treshold=1e-6, maxiter=10):
-    """ Remesh input mesh.
+    """Remesh input mesh.
 
     Parameters
     ----------
@@ -27,17 +25,16 @@ def remesh(mesh, target_length, preserve_features=False, abs_treshold=1e-6, maxi
     This script is slightly modified form
     (PyMesh documentation)[https://github.com/qnzhou/PyMesh/blob/master/scripts/fix_mesh.py]
     """
-
-    mesh, __ = pymesh.remove_degenerated_triangles(mesh, 100)
-    mesh, __ = pymesh.split_long_edges(mesh, target_length)
-    num_vertices = mesh.num_vertices    # Used for stopping criterion
+    mesh, _ = pymesh.remove_degenerated_triangles(mesh, 100)
+    mesh, _ = pymesh.split_long_edges(mesh, target_length)
+    num_vertices = mesh.num_vertices    # Used as stopping criterion
 
     count = 0   # Keep track of number of iterations
     while True:
-        mesh, __ = pymesh.collapse_short_edges(mesh, abs_treshold)
-        mesh, __ = pymesh.collapse_short_edges(mesh, target_length,
-                                               preserve_feature=preserve_features)
-        mesh, __ = pymesh.remove_obtuse_triangles(mesh, 150.0, 100)     # TODO: Determine max angle 
+        mesh, _ = pymesh.collapse_short_edges(mesh, abs_treshold)
+        mesh, _ = pymesh.collapse_short_edges(mesh, target_length,
+                                              preserve_feature=preserve_features)
+        mesh, _ = pymesh.remove_obtuse_triangles(mesh, 150.0, 100)     # TODO: Determine max angle 
 
         if mesh.num_vertices == num_vertices:
             # TODO: Add another stopping criterion
@@ -54,9 +51,9 @@ def remesh(mesh, target_length, preserve_features=False, abs_treshold=1e-6, maxi
     mesh, __ = pymesh.remove_duplicated_faces(mesh)
     mesh = pymesh.compute_outer_hull(mesh)
 
-    mesh, __ = pymesh.remove_duplicated_faces(mesh)
-    mesh, __ = pymesh.remove_obtuse_triangles(mesh, 179.0, 100)   # TODO: Determine max angle
-    mesh, __ = pymesh.remove_isolated_vertices(mesh)
+    mesh, _ = pymesh.remove_duplicated_faces(mesh)
+    mesh, _ = pymesh.remove_obtuse_triangles(mesh, 179.0, 100)   # TODO: Determine max angle
+    mesh, _ = pymesh.remove_isolated_vertices(mesh)
 
     return mesh
 
