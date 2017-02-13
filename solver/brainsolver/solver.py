@@ -3,13 +3,11 @@
 from cbcpost import SolutionField, PostProcessor
 from cbcbrain import *
 from cbcbrain.cellmodels import AdExManual
-#from adex import AdExManual
-#from adex import AdExManual
 import time
 from collections import OrderedDict
 from IPython import embed
 from shock import get_shock
-from conductivites import get_conductivities
+from conductivites import *
 
 
 def setup_general_parameters():
@@ -29,7 +27,7 @@ def setup_application_parameters():
     # Setup application parameters and parse from command-line
     application_parameters = Parameters("Application")
     application_parameters.add("T", 1e-1)        # End time  (ms)
-    application_parameters.add("timestep", 1e-1) # Time step (ms)
+    application_parameters.add("timestep", 1e-2)        # Time step (ms)
     application_parameters.add("directory",
                                "results_%s" % time.strftime("%Y_%d%b_%Hh_%Mm"))
     application_parameters.parse()
@@ -46,7 +44,17 @@ def setup_conductivities():
     -------
     (M_i, M_e)
     """
-    return get_conductivities(3)
+
+    intracellular = IntracellularConductivity(degree=1)
+    extracellular = ExtracellularConductivity(degree=1)
+    water = Water(degree=1)
+
+    M_i = {1: intracellular, 2: intracellular}
+    M_e = {1: extracellular, 2: extracellular}
+    #M_i = intracellular
+    #M_e = extracellular
+
+    return M_i, M_e
 
 
 def setup_cell_model(application_parameters):
@@ -67,11 +75,16 @@ def setup_cell_model(application_parameters):
 def setup_cardiac_model(application_parameters):
     # Initialize the computational domain in time and space
     time = Constant(0.0)
-    #mesh = UnitCubeMesh(100, 100, 100)
     mesh = Mesh()
-    hdf = HDF5File(mesh.mpi_comm(), "../../convex_hull/erika_res32.h5", "r")
+    hdf = HDF5File(mesh.mpi_comm(), "../../convex_hull/brain.h5", "r")
     hdf.read(mesh, "/mesh", False)
-    hdf.close()
+
+    facet_domains = FacetFunction("size_t", mesh)
+    hdf.read(facet_domains, "/boundaries")
+
+    cell_domains = CellFunction("size_t", mesh)
+    hdf.read(cell_domains, "/domains")
+    print "Cell domainds.array() :", set(cell_domains.array())
 
     # Setup conductivities
     (M_i, M_e) = setup_conductivities()
@@ -84,7 +97,10 @@ def setup_cardiac_model(application_parameters):
     pulse = get_shock()
 
     # Initialize cardiac model with the above input
-    heart = CardiacModel(mesh, time, M_i, M_e, cell_model, stimulus=pulse)
+    args = (mesh, time, M_i, M_e, cell_model)
+    kwargs = {"stimulus" : pulse, "cell_domains" : cell_domains, "facet_domains" : facet_domains}
+    #kwargs = {"stimulus" : pulse}
+    heart = CardiacModel(*args, **kwargs)
     return heart
 
 
