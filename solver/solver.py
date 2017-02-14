@@ -1,6 +1,7 @@
 # Modified from demo
 
-from cbcpost import SolutionField, PostProcessor
+from cbcpost import *
+from cbcpost.utils import *
 from cbcbrain import *
 from cbcbrain.cellmodels import AdExManual
 import time
@@ -9,6 +10,7 @@ from IPython import embed
 from shock import get_shock
 from conductivites import *
 
+set_log_level(100)
 
 def setup_general_parameters():
     """ Turn on FFC/FEniCS optimizations
@@ -21,13 +23,13 @@ def setup_general_parameters():
 
 
 def setup_application_parameters():
-    """ Define paremeters for the problem and solvers
+    """Define parameters for the problem and solvers
     """
 
     # Setup application parameters and parse from command-line
     application_parameters = Parameters("Application")
-    application_parameters.add("T", 10e0)        # End time  (ms)
-    application_parameters.add("timestep", 1e-1)        # Time step (ms)
+    application_parameters.add("T", 2.5e0)              # End time  (ms)
+    application_parameters.add("timestep", 1e-2)        # Time step (ms)
     application_parameters.add("directory",
                                "results_%s" % time.strftime("%Y_%d%b_%Hh_%Mm"))
     application_parameters.parse()
@@ -42,14 +44,17 @@ def setup_conductivities():
     """
     Returns
     -------
-    (M_i, M_e)
+    M_i : dict
+        {tag, Expression}
+    M_e : dict 
+        {tag, Expression}
     """
 
     intracellular = IntracellularConductivity(degree=1)
     extracellular = ExtracellularConductivity(degree=1)
     water = Water(degree=1)
 
-    M_i = {1: intracellular, 2: intracellular*1e-5}
+    M_i = {1: intracellular, 2: intracellular*1e-3}
     M_e = {1: extracellular, 2: water}
 
     return M_i, M_e
@@ -91,7 +96,6 @@ def setup_brain_model(application_parameters):
     cell_model = setup_cell_model(application_parameters)
 
     # Define some simulation protocol (use cpp expression for speed)
-    #pulse = Expression("10*t*x[0]", t=time, degree=1)
     pulse = get_shock()
 
     # Initialize brain model with the above input
@@ -146,14 +150,24 @@ def main():
     postprocessor.add_field(SolutionField("v", solution_field_params))
     postprocessor.add_field(SolutionField("u", solution_field_params))
 
+    brainrestrictor = create_submesh(brain.domain(), brain.cell_domains(), 1)
+    waterrestrictor = create_submesh(brain.domain(), brain.cell_domains(), 2)
+
+    postprocessor.add_fields([
+          Restrict("u", brainrestrictor, dict(plot=False, save=True), name="u_brain"),
+          Restrict("v", brainrestrictor, dict(plot=False, save=True), name="v_brain"),
+          Restrict("u", waterrestrictor, dict(plot=False, save=True), name="u_water"),
+                             ])
+
     theta = splitting_solver_params["theta"]
     for i, (timestep, fields) in enumerate(solutions):
         (t0, t1) = timestep
         (vs_, vs, vur) = fields
         v, u = vu.split(deepcopy=True)
 
-        postprocessor.update_all({"v": lambda: v, "u" : lambda: u}, 
-                                  t0 + theta*(t1 - t0), i)
+        postprocessor.update_all({"v": lambda: v, "u" : lambda: u},
+                                 t0 + theta*(t1 - t0), i)
+        print "Solving time {0} out of {1}".format(t0 + theta*(t1 - t0), T)
 
     postprocessor.finalize_all()
     return solver
