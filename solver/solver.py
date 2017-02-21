@@ -7,7 +7,7 @@ from cbcbrain.cellmodels import AdExManual
 import time
 from collections import OrderedDict
 from IPython import embed
-from shock import get_shock
+from shock import Shock3D
 from conductivites import *
 
 set_log_level(100)
@@ -28,7 +28,7 @@ def setup_application_parameters():
 
     # Setup application parameters and parse from command-line
     application_parameters = Parameters("Application")
-    application_parameters.add("T", 2.5e0)              # End time  (ms)
+    application_parameters.add("T", 3e0)                # End time  (ms)
     application_parameters.add("timestep", 1e-2)        # Time step (ms)
     application_parameters.add("directory",
                                "results_%s" % time.strftime("%Y_%d%b_%Hh_%Mm"))
@@ -41,12 +41,14 @@ def setup_application_parameters():
 
 
 def setup_conductivities():
-    """
+    """Wrap expressions for extra- and intracellular conductance in dictionaries with keys 
+    pertaining to the celldomains.
+
     Returns
     -------
     M_i : dict
         {tag, Expression}
-    M_e : dict 
+    M_e : dict
         {tag, Expression}
     """
 
@@ -54,28 +56,31 @@ def setup_conductivities():
     extracellular = ExtracellularConductivity(degree=1)
     water = Water(degree=1)
 
-    M_i = {1: intracellular, 2: intracellular*1e-3}
+    M_i = {1: intracellular, 2: intracellular*1e-6}
     M_e = {1: extracellular, 2: water}
 
     return M_i, M_e
 
 
 def setup_cell_model(application_parameters):
-    """ Setup cell model with parameters
-    """
-    params = OrderedDict([("C", 281),           # Membrane capacitance (pF
-                          ("g_L", 30),          # Leak conductance (ns)
+    "Setup cell model with parameters"
+    params = OrderedDict([("C", 281e-3),           # Membrane capacitance (nF)
+                          ("g_L", 30e-3),        # Leak conductance (\mu S)
+                          #("g_L", 30),        # Leak conductance (nS)
                           ("E_L", -70.6),       # Leak reversal potential (mV)
                           ("V_T", -50.4),       # Spike threshold (mV)
                           ("Delta_T", 2),       # Slope factor (mV)
                           ("tau_w", 144),       # Adaptation time constant (ms)
-                          ("a", 4),             # Subthreshold adaptation (nS)
-                          ("b", 0.085)])        # Spike-triggered adaptation (nA)
+                          ("a", 4e-3),           # Subthreshold adaptation (\mu S)
+                          #("a", 4),           # Subthreshold adaptation (nS)
+                          ("b", 80.5e-3)])       # Spike-triggered adaptation (mA)
+                          #("b", 0.0805)])       # Spike-triggered adaptation (nA)
 
     return AdExManual(params=params)
 
 
 def setup_brain_model(application_parameters):
+    "Return brain model instance"
     # Initialize the computational domain in time and space
     time = Constant(0.0)
     mesh = Mesh()
@@ -87,7 +92,6 @@ def setup_brain_model(application_parameters):
 
     cell_domains = CellFunction("size_t", mesh)
     hdf.read(cell_domains, "/domains")
-    print "Cell domainds.array() :", set(cell_domains.array())
 
     # Setup conductivities
     (M_i, M_e) = setup_conductivities()
@@ -96,17 +100,24 @@ def setup_brain_model(application_parameters):
     cell_model = setup_cell_model(application_parameters)
 
     # Define some simulation protocol (use cpp expression for speed)
-    pulse = get_shock()
+    shock_kwargs = {"t": 0,
+                    "spread": 0.003,
+                    "amplitude": 8e2,
+                    "center": (31, -15, 73),
+                    "half_period": 1e-1,
+                    "degree": 1}
+
+    pulse = Shock3D(**shock_kwargs)
 
     # Initialize brain model with the above input
     args = (mesh, time, M_i, M_e, cell_model)
-    kwargs = {"stimulus" : pulse, "cell_domains" : cell_domains, "facet_domains" : facet_domains}
-    #kwargs = {"stimulus" : pulse}
+    kwargs = {"stimulus": pulse, "cell_domains": cell_domains, "facet_domains": facet_domains}
     heart = BrainModel(*args, **kwargs)
     return heart
 
 
 def main():
+    comm = mpi_comm_world()
     application_parameters = setup_application_parameters()
     setup_general_parameters()
 
@@ -121,7 +132,6 @@ def main():
     splitting_solver_params["BrainODESolver"]["scheme"] = "GRL1"   # TODO: what is this
 
     splitting_solver_params["pde_solver"] = "bidomain"
-    #splitting_solver_params["BidomainSolver"]["linear_solver_type"] = "direct"
     splitting_solver_params["BidomainSolver"]["linear_solver_type"] = "iterative"
     splitting_solver_params["BidomainSolver"]["algorithm"] = "cg"
     splitting_solver_params["BidomainSolver"]["preconditioner"] = "petsc_amg"
@@ -138,25 +148,28 @@ def main():
 
     # Set-up PostProcessor
 
-    postprocessor = PostProcessor(dict(casedir="Results", clean_casedir=True))
+    postprocessor = PostProcessor(dict(casedir=application_parameters["directory"],
+                                       clean_casedir=True))
     postprocessor.store_mesh(brain.domain())
     postprocessor.store_params(dict(application_parameters))
 
-    solution_field_params = dict(save=True,
-                                 save_as=["hdf5", "xdmf"],
-                                 plot=False,
-                                )
+    field_params = dict(save=True,
+                        save_as=["hdf5", "xdmf"],
+                        plot=False,
+                        start_timestep=-1,
+                        stride_timestep=1
+                       )
 
-    postprocessor.add_field(SolutionField("v", solution_field_params))
-    postprocessor.add_field(SolutionField("u", solution_field_params))
+    postprocessor.add_field(SolutionField("v", field_params))
+    postprocessor.add_field(SolutionField("u", field_params))
 
     brainrestrictor = create_submesh(brain.domain(), brain.cell_domains(), 1)
     waterrestrictor = create_submesh(brain.domain(), brain.cell_domains(), 2)
 
     postprocessor.add_fields([
-          Restrict("u", brainrestrictor, dict(plot=False, save=True), name="u_brain"),
-          Restrict("v", brainrestrictor, dict(plot=False, save=True), name="v_brain"),
-          Restrict("u", waterrestrictor, dict(plot=False, save=True), name="u_water"),
+          Restrict("u", brainrestrictor, field_params, name="u_brain"),
+          Restrict("v", brainrestrictor, field_params, name="v_brain"),
+          Restrict("u", waterrestrictor, field_params, name="u_water"),
                              ])
 
     theta = splitting_solver_params["theta"]
@@ -165,9 +178,11 @@ def main():
         (vs_, vs, vur) = fields
         v, u = vu.split(deepcopy=True)
 
+        current_t = t0 + theta*(t1 - t0)
         postprocessor.update_all({"v": lambda: v, "u" : lambda: u},
-                                 t0 + theta*(t1 - t0), i)
-        print "Solving time {0} out of {1}".format(t0 + theta*(t1 - t0), T)
+                                 current_t, i)
+        if MPI.rank(comm) == 0:
+            print "Solving time {0} out of {1}".format(current_t, T)
 
     postprocessor.finalize_all()
     return solver
