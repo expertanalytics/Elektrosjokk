@@ -13,10 +13,10 @@ class Shock3D(Expression):
     def eval(self, value, x):
         A = self.amplitude
         s = self.spread
-        if abs(sin(2*pi/self.half_period*self.t)) >= 0.5:      # Create a periodic square pulse
+        if abs(sin(2*pi/self.half_period*float(self.t))) >= 0.5:      # Create a periodic square pulse
         #if self.t > 0.5:
             value[0] = -A*exp(-s*pow(x[0] - self.x, 2))*exp(-s*pow(x[1] - self.y, 2))*\
-            exp(-s*pow(x[2] - self.z))
+            exp(-s*pow(x[2] - self.z, 2))
         else:
             value[0] = 0
 

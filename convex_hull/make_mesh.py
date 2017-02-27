@@ -194,11 +194,11 @@ def test_poisson(brain_name):
 
 
 def make_mesh(path, input_name, output_name, fenics_tests=True, delta=1.1):
-     make_surface_meshes(path, input_name, output_name)
+    make_surface_meshes(path, input_name, output_name, delta)
     make_volume_mesh(output_name)
 
     if fenics_tests:
-        test_subdomains(path, input_name, output_name)
+        test_subdomains(output_name)
     make_hdf5(output_name)
    
     if fenics_tests:
@@ -206,11 +206,9 @@ def make_mesh(path, input_name, output_name, fenics_tests=True, delta=1.1):
 
 
 if __name__ == "__main__":
-    args = {path : "../kent-and-meshes", 
-            input_name : "erika_res32",
-            output_name : "brain}"
-    
-    kwrags = {fenics_tests: True, 
-              delta: 2.0}
+    args = ("../kent-and-meshes", "erika_res32", "brain")
+
+    kwargs = {"fenics_tests": True, 
+              "delta": 2.0}
 
     make_mesh(*args, **kwargs)
