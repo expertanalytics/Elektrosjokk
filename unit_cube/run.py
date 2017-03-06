@@ -26,7 +26,7 @@ parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
 parameters["form_compiler"]["quadrature_degree"] = 3
 
 # Define the computational domain
-N = 20
+N = 10
 mesh = UnitCubeMesh(N, N, N)
 time = Constant(0.0)
 
@@ -42,7 +42,7 @@ M_e.vector()[:] = 0.1*(numpy.random.rand(Q.dim()) + 1.0)
 cell_model = AdExManual()
 
 # Define some external stimulus
-stimulus = Expression("(x[0] > 0.9 && t <= 7.0) ? 360.0 : 0.0",
+stimulus = Expression("(x[0] > 0.9 && t <= 7.0) ? 180.0 : 0.0",
                       t=time, degree=3)
 
 # Collect this information into the CardiacModel class
@@ -52,7 +52,7 @@ cardiac_model = CardiacModel(mesh, time, M_i, M_e, cell_model, stimulus)
 ps = SplittingSolver.default_parameters()
 ps["theta"] = 0.5                        # Second order splitting scheme
 ps["pde_solver"] = "bidomain"          # Use Monodomain model for the PDEs
-ps["CardiacODESolver"]["scheme"] = "GRL1" # 1st order Rush-Larsen for the ODEs
+ps["CardiacODESolver"]["scheme"] = "RL2" # 1st order Rush-Larsen for the ODEs
 ps["BidomainSolver"]["linear_solver_type"] = "iterative"
 ps["BidomainSolver"]["algorithm"] = "cg"
 ps["BidomainSolver"]["preconditioner"] = "petsc_amg"
@@ -65,7 +65,7 @@ vs_.assign(cell_model.initial_conditions(), solver.VS)
 
 # Time stepping parameters
 k = 0.005
-T = 0.3
+T = 1.0
 interval = (0.0, T)
 
 
