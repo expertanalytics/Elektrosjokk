@@ -143,7 +143,7 @@ def main():
     solver = SplittingSolver(brain, params=splitting_solver_params)
 
     # Extract solution fields from solver
-    (vs_, vs, vu) = solver.solution_fields()
+    (vs_, vs, vur) = solver.solution_fields()
 
     # Extract and assign initial condition
     vs_.assign(brain.cell_models().initial_conditions())
@@ -183,7 +183,9 @@ def main():
     for i, (timestep, fields) in enumerate(solutions):
         (t0, t1) = timestep
         (vs_, vs, vur) = fields
-        v, u = vu.split(deepcopy=True)
+        solutions = vur.split(deepcopy=True)
+        v = solutions[0]
+        u = solutions[1]
 
         current_t = t0 + theta*(t1 - t0)
         postprocessor.update_all({"v": lambda: v, "u" : lambda: u},

@@ -206,7 +206,7 @@ def make_mesh(path, input_name, output_name, fenics_tests=True, delta=1.1):
 
 
 if __name__ == "__main__":
-    args = ("../kent-and-meshes", "erika_res32", "brain")
+    args = ("../meshes", "erika_res32", "brain")
 
     kwargs = {"fenics_tests": True, 
               "delta": 2.0}
