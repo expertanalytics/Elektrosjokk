@@ -1,10 +1,15 @@
 import subprocess
 import os
 import numpy as np
-from meshing import remesh
-from utils import make_pymesh, save_mesh
+from utils import make_pymesh, save_mesh, remesh
 from BrainConvexHull import BrainConvexHull
-from fenics import *
+from dolfin import Mesh, MeshFunction, HDF5File, Measure, assemble, Constant, \
+                   DirichletBC, FacetFunction, inner, grad, TestFunction, \
+                   TrialFunction, FunctionSpace, lhs, rhs, Function, solve, File
+
+
+__all__ = ["clean", "make_hdf5", "make_mesh", "make_surface_meshes", 
+           "make_volume_mesh", "test_poisson", "test_subdomains"]
 
 
 def make_surface_meshes(path, input_name, output_name, delta):
@@ -149,9 +154,8 @@ def test_subdomains(hull_name):
 
 
 def test_poisson(brain_name):
-    """Solve a Poisson equation on a mesh with two sub-domains using a
-    variable.
-    coefficient.
+    """Solve a Poisson equation on a mesh with two sub-domains using different 
+    coefficients on the sub domains.
     """
     mesh = Mesh()
     hdf5_file = HDF5File(mesh.mpi_comm(), "{}.h5".format(brain_name), "r")
@@ -190,10 +194,11 @@ def test_poisson(brain_name):
     solve(a == L, u_, bcs)
 
     print np.linalg.norm(u_.vector().array())
-    File("test_{}.pvd".format(brain_name)) << u_
+    File("test_poisson_{}.pvd".format(brain_name)) << u_
 
 
 def make_mesh(path, input_name, output_name, fenics_tests=True, delta=1.1):
+    """Wrapper function for the various utilities in this module."""
     make_surface_meshes(path, input_name, output_name, delta)
     make_volume_mesh(output_name)
 
@@ -208,7 +213,7 @@ def make_mesh(path, input_name, output_name, fenics_tests=True, delta=1.1):
 if __name__ == "__main__":
     args = ("../meshes", "erika_res32", "brain")
 
-    kwargs = {"fenics_tests": True, 
+    kwargs = {"fenics_tests": True,
               "delta": 2.0}
 
     make_mesh(*args, **kwargs)

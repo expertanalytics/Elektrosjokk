@@ -1,34 +1,27 @@
 # Modified from demo
 
-from cbcpost import *
-from cbcpost.utils import *
-from cbcbeat import *
+from cbcpost import PostProcessor, Field, SolutionField, Restrict
+from cbcpost.utils import create_submesh
+import cbcbeat as beat
 from cbcbeat.cellmodels import AdExManual, NoCellModel
 import time
 from collections import OrderedDict
-from IPython import embed
 from shock import Shock3D
-from conductivites import *
-
-set_log_level(100)
-#set_log_level(13)
+from conductivites import IntracellularConductivity, ExtracellularConductivity, Water
 
 
 def setup_general_parameters():
-    """Turn on FFC/FEniCS optimizations.
-    """
-    parameters["form_compiler"]["representation"] = "uflacs"
-    parameters["form_compiler"]["cpp_optimize"] = True
+    """Turn on FFC/FEniCS optimizations."""
+    beat.parameters["form_compiler"]["representation"] = "uflacs"
+    beat.parameters["form_compiler"]["cpp_optimize"] = True
     flags = ["-O3", "-ffast-math", "-march=native"]
-    parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
-    parameters["form_compiler"]["quadrature_degree"] = 3
+    beat.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
+    beat.parameters["form_compiler"]["quadrature_degree"] = 3
 
 
 def setup_application_parameters():
-    """Define parameters for the problem and solvers.
-    """
-    # Setup application parameters and parse from command-line
-    application_parameters = Parameters("Application")
+    """Define parameters for the problem and solvers."""
+    application_parameters = beat.Parameters("Application")
     application_parameters.add("T", 3e0)                # End time  (ms)
     application_parameters.add("timestep", 1e-2)        # Time step (ms)
     application_parameters.add("directory",
@@ -36,21 +29,22 @@ def setup_application_parameters():
     application_parameters.parse()
 
     # Turn off adjoint functionality
-    parameters["adjoint"]["stop_annotating"] = True
-    info(application_parameters, True)
+    beat.parameters["adjoint"]["stop_annotating"] = True
+    beat.info(application_parameters, True)
     return application_parameters
 
 
 def setup_conductivities():
-    """Wrap expressions for extra- and intracellular conductance in dictionaries with keys 
-    pertaining to the celldomains.
+    """Expressions for extra- and intracellular conductance. 
 
-    Returns
-    -------
-    M_i : dict
-        {tag, Expression}
-    M_e : dict
-        {tag, Expression}
+    The extra- and intracellulas conductances are returned as two dictionaries with
+    keys corresponding to a mesh function.
+
+    Returns:
+        M_i : dict
+            {tag, Expression}
+        M_e : dict
+            {tag, Expression}
     """
 
     intracellular = IntracellularConductivity(degree=1)
@@ -60,12 +54,15 @@ def setup_conductivities():
     M_i = {1: intracellular, 2: intracellular*1e-6}
     M_e = {1: extracellular, 2: water}
 
-    return intracellular, extracellular
     return M_i, M_e
 
 
-def setup_cell_model(application_parameters):
-    "Setup cell model with parameters"
+def setup_cell_model():
+    """Setup cell model with parameters.
+    
+    Returns:
+        CardiacCellModel
+    """
     params = OrderedDict([("C", 281e-3),        # Membrane capacitance (nF)
                           ("g_L", 30e-3),       # Leak conductance (\mu S)
                           #("g_L", 30),         # Leak conductance (nS)
@@ -82,24 +79,31 @@ def setup_cell_model(application_parameters):
 
 
 def setup_brain_model(application_parameters):
-    "Return brain model instance"
+    """Return brain model instance.
+    
+    The mesh, `cell_domains` and `facet_domains` are loaded from a hdf5 file.
+
+    Returns:
+        CardiacModel
+    """
+
     # Initialize the computational domain in time and space
-    time = Constant(0.0)
-    mesh = Mesh()
-    hdf = HDF5File(mesh.mpi_comm(), "../convex_hull/brain.h5", "r")
+    time = beat.Constant(0.0)
+    mesh = beat.Mesh()
+    hdf = beat.HDF5File(mesh.mpi_comm(), "../convex_hull/brain.h5", "r")
     hdf.read(mesh, "/mesh", False)
 
-    facet_domains = FacetFunction("size_t", mesh)
+    facet_domains = beat.FacetFunction("size_t", mesh)
     hdf.read(facet_domains, "/boundaries")
 
-    cell_domains = CellFunction("size_t", mesh)
+    cell_domains = beat.CellFunction("size_t", mesh)
     hdf.read(cell_domains, "/domains")
 
     # Setup conductivities
     (M_i, M_e) = setup_conductivities()
 
     # Setup cell model
-    cell_model = setup_cell_model(application_parameters)
+    cell_model = setup_cell_model()
 
     # Define some simulation protocol (use cpp expression for speed)
     shock_kwargs = {"t": time,
@@ -113,15 +117,14 @@ def setup_brain_model(application_parameters):
 
     # Initialize brain model with the above input
     args = (mesh, time, M_i, M_e, cell_model)
-    cell_domains = None
-    facet_domains = None
-    kwargs = {"stimulus": pulse, "cell_domains": cell_domains, "facet_domains": facet_domains}
-    brain = CardiacModel(*args, **kwargs)
+    kwargs = {"stimulus": pulse, "cell_domains": cell_domains,
+              "facet_domains": facet_domains}
+    brain = beat.CardiacModel(*args, **kwargs)
     return brain
 
 
 def main():
-    comm = mpi_comm_world()
+    comm = beat.mpi_comm_world()
     application_parameters = setup_application_parameters()
     setup_general_parameters()
 
@@ -131,16 +134,15 @@ def main():
     T = application_parameters["T"]
     k_n = application_parameters["timestep"]
 
-    splitting_solver_params = SplittingSolver.default_parameters()
+    splitting_solver_params = beat.SplittingSolver.default_parameters()
     splitting_solver_params["theta"] = 0.5
-    splitting_solver_params["CardiacODESolver"]["scheme"] = "GRL1"   # TODO: what is this
+    splitting_solver_params["CardiacODESolver"]["scheme"] = "ERK1"  # choose wisely
 
     splitting_solver_params["pde_solver"] = "bidomain"
-    # splitting_solver_params["BidomainSolver"]["linear_solver_type"] = "direct"
     splitting_solver_params["BidomainSolver"]["linear_solver_type"] = "iterative"
     splitting_solver_params["BidomainSolver"]["algorithm"] = "cg"
     splitting_solver_params["BidomainSolver"]["preconditioner"] = "petsc_amg"
-    solver = SplittingSolver(brain, params=splitting_solver_params)
+    solver = beat.SplittingSolver(brain, params=splitting_solver_params)
 
     # Extract solution fields from solver
     (vs_, vs, vur) = solver.solution_fields()
@@ -165,10 +167,11 @@ def main():
                         stride_timestep=1
                        )
 
+    # Add transmembrane potential, v, and extracellular potential, u.
     postprocessor.add_field(SolutionField("v", field_params))
     postprocessor.add_field(SolutionField("u", field_params))
 
-    """
+    # Add fields over submeshes, defined by tags in brain.cell_domains()
     brainrestrictor = create_submesh(brain.domain(), brain.cell_domains(), 1)
     waterrestrictor = create_submesh(brain.domain(), brain.cell_domains(), 2)
 
@@ -177,7 +180,6 @@ def main():
           Restrict("v", brainrestrictor, field_params, name="v_brain"),
           Restrict("u", waterrestrictor, field_params, name="u_water"),
                              ])
-    """
 
     theta = splitting_solver_params["theta"]
     for i, (timestep, fields) in enumerate(solutions):
@@ -188,15 +190,16 @@ def main():
         u = solutions[1]
 
         current_t = t0 + theta*(t1 - t0)
-        postprocessor.update_all({"v": lambda: v, "u" : lambda: u},
+        postprocessor.update_all({"v": lambda: v,   # Update and store all fields
+                                  "u": lambda: u},
                                  current_t, i)
-        if MPI.rank(comm) == 0:
+        if beat.MPI.rank(comm) == 0:
             print "Solving time {0} out of {1}".format(current_t, T)
 
     postprocessor.finalize_all()
-    return solver
 
 
 if __name__ == "__main__":
+    beat.set_log_level(100)
     main()
     print "Success!"
