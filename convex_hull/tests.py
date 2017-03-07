@@ -35,7 +35,7 @@ def test_move_point(bch):
     assert np.linalg.norm(p1 - expected) < 1e-15
 
 
-def test_compute_distance_to_brain(bch):
+def test_compute_distance_to_brain(bch, S):
     delta = 1.1     # Distance to move each point
 
     computed = bch.compute_distance_to_brain(S*delta)
