@@ -38,16 +38,16 @@ def setup_conductivities(mesh):
     # Create some random cunductivity over two subdomains
     Q = beat.FunctionSpace(mesh, "DG", 0)
     Mi_low = beat.Function(Q)
-    Mi_low.vector()[:] = 0.1*(numpy.random.rand(Q.dim()) + 1.0)
+    Mi_low.vector()[:] = 0.1*(numpy.random.rand(Mi_low.vector().local_size()) + 1.0)
 
     Me_low = beat.Function(Q)
-    Me_low.vector()[:] = 0.1*(numpy.random.rand(Q.dim()) + 1.0)
+    Me_low.vector()[:] = 0.1*(numpy.random.rand(Me_low.vector().local_size()) + 1.0)
 
     Mi_high = beat.Function(Q)
-    Mi_high.vector()[:] = 0.1*(numpy.random.rand(Q.dim()) + 5.0)
+    Mi_high.vector()[:] = 0.1*(numpy.random.rand(Mi_high.vector().local_size()) + 5.0)
 
     Me_high = beat.Function(Q)
-    Me_high.vector()[:] = 0.1*(numpy.random.rand(Q.dim()) + 5.0)
+    Me_high.vector()[:] = 0.1*(numpy.random.rand(Me_high.vector().local_size()) + 5.0)
 
     # NB! Keys has to match the tags in cardiac_model.cell_domains() 
     M_i = {0: Mi_low, 1: Mi_high}
@@ -86,7 +86,7 @@ def setup_brain_model(application_parameters, N=10):
     cell_model = setup_cell_model(application_parameters)
 
     # Define some external stimulus
-    stimulus = beat.Expression("(x[0] > 0.9 && t <= 7.0) ? 180.0 : 0.0",
+    stimulus = beat.Expression("(x[0] > 0.9 && t <= 7.0) ? 240.0 : 0.0",
                                t=time, degree=3)    # time is same instance as in brain
 
     # Initialize brain model with the above input

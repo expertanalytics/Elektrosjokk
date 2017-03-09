@@ -1,13 +1,14 @@
 # Modified from demo
 
-from cbcpost import PostProcessor, Field, SolutionField, Restrict
+from cbcpost import PostProcessor, SolutionField, Restrict
 from cbcpost.utils import create_submesh
 import cbcbeat as beat
-from cbcbeat.cellmodels import AdExManual, NoCellModel
+from cbcbeat.cellmodels import AdExManual
 import time
 from collections import OrderedDict
 from shock import Shock3D
-from conductivites import IntracellularConductivity, ExtracellularConductivity, Water
+from conductivites import IntracellularConductivity, ExtracellularConductivity, Water,\
+                          get_random_conductivity
 
 
 def setup_general_parameters():
@@ -34,27 +35,34 @@ def setup_application_parameters():
     return application_parameters
 
 
-def setup_conductivities():
+def setup_conductivities(mesh):
     """Expressions for extra- and intracellular conductance. 
 
-    The extra- and intracellulas conductances are returned as two dictionaries with
+    The extra- and intracellular conductances are returned as two dictionaries with
     keys corresponding to a mesh function.
 
     Returns:
-        M_i : dict
+        Mi_dict : dict
             {tag, Expression}
-        M_e : dict
+        Me_dict : dict
             {tag, Expression}
     """
 
-    intracellular = IntracellularConductivity(degree=1)
-    extracellular = ExtracellularConductivity(degree=1)
-    water = Water(degree=1)
+    # intracellular = IntracellularConductivity(degree=1)
+    # extracellular = ExtracellularConductivity(degree=1)
+    # water = Water(degree=1)
+    #
+    # M_i = {1: intracellular, 2: intracellular*1e-6}
+    # M_e = {1: extracellular, 2: water}
 
-    M_i = {1: intracellular, 2: intracellular*1e-6}
-    M_e = {1: extracellular, 2: water}
+    Mi = get_random_conductivity(mesh, 3e3)
+    Me = get_random_conductivity(mesh, 2e2)
+    water = get_random_conductivity(mesh, 1e2)
 
-    return M_i, M_e
+    Mi_dict = {1: Mi, 2: Mi*1e-6}
+    Me_dict = {1: Me, 2: water}
+
+    return Mi_dict, Me_dict
 
 
 def setup_cell_model():
@@ -100,24 +108,35 @@ def setup_brain_model(application_parameters):
     hdf.read(cell_domains, "/domains")
 
     # Setup conductivities
-    (M_i, M_e) = setup_conductivities()
+    (M_i, M_e) = setup_conductivities(mesh)
 
     # Setup cell model
     cell_model = setup_cell_model()
 
     # Define some simulation protocol (use cpp expression for speed)
-    shock_kwargs = {"t": time,
+    # TODO: This is stupid. Write some default parameters
+    plus_kwargs = {"t": time,
                     "spread": 0.003,
-                    "amplitude": 8e2,
+                    "amplitude": 2e2,
                     "center": (31, -15, 73),
-                    "half_period": 1e-1,
+                    "double_period": 2e-1,
                     "degree": 1}
 
-    pulse = Shock3D(**shock_kwargs)
+    # plus_kwargs.update?
+    minus_kwargs = {"t": time,
+                    "spread": plus_kwargs["spread"],
+                    "amplitude": -1*plus_kwargs["amplitude"],
+                    "center": (61, -18, 33),
+                    "double_period": plus_kwargs["double_period"],
+                    "degree": 1}
+
+    plus_pulse = Shock3D(**plus_kwargs)
+    minus_pulse = Shock3D(**minus_kwargs)
+    pulse = plus_pulse + minus_pulse
 
     # Initialize brain model with the above input
     args = (mesh, time, M_i, M_e, cell_model)
-    kwargs = {"stimulus": pulse, "cell_domains": cell_domains,
+    kwargs = {"stimulus":pulse, "cell_domains": cell_domains,
               "facet_domains": facet_domains}
     brain = beat.CardiacModel(*args, **kwargs)
     return brain

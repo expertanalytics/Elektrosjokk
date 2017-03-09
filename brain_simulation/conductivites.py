@@ -1,9 +1,10 @@
 """Overloaded Expressions representing the intra- and extracellular conductances."""
 
-from dolfin import Expression
+from dolfin import Expression, FunctionSpace, Function
+from numpy.random import rand
 
-
-__all__ = ["IntracellularConductivity", "ExtracellularConductivity", "Water"]
+__all__ = ["IntracellularConductivity", "ExtracellularConductivity", "Water",
+           "get_random_conductivity"]
 
 
 class IntracellularConductivity(Expression):
@@ -73,3 +74,22 @@ class Water(Expression):
     def value_shape(self):
         """Return the shape of `eval`."""
         return (3, 3)
+
+
+def get_random_conductivity(mesh, value, deviation=1e-1):
+    """Get a conductivity function with random fluctuations.
+
+    Parameters:
+        mesh (dolfin mesh)
+        value (float): Baseline conductivity
+        deviattion (float, otional): The magnitude of the random component relative
+            to the baseline conductance. Defaults to 1e-1.
+
+    Returns:
+        dolfin Function
+    """
+
+    Q = FunctionSpace(mesh, "DG", 0)
+    conductivity = Function(Q)
+    conductivity.vector()[:] = value*(deviation*rand(conductivity.vector().local_size()) + 1)
+    return conductivity
