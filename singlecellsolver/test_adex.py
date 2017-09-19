@@ -29,14 +29,17 @@ class Stimulus(Expression):
 def main():
     "Solve a single cell model on some time frame."
 
+    # Init solver
+    adex_solver = True
+    if adex_solver:
+        model = Adex()
+    else:
+        model = AdexManual()
+
     # Initialize model and assign stimulus
-    # model = Adex()
-    model = AdexManual()
     time = Constant(0.0)
     model.stimulus = Stimulus(t=time, degree=1)
 
-    # Init solver
-    adex_solver = True 
     params = SingleCellSolver.default_parameters()
     if adex_solver:
         params = SingleCellSolver.default_parameters_adex()
