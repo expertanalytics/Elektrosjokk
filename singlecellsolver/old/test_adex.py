@@ -41,25 +41,23 @@ def main():
     model.stimulus = Stimulus(t=time, degree=1)
 
     params = SingleCellSolver.default_parameters()
-    if adex_solver:
-        params = SingleCellSolver.default_parameters_adex()
 
     # params["theta"] = 0.5     # FIXME: Why not a parameter?
     params["scheme"] = "RK4"
-    solver = SingleCellSolver(model, time, params, adex_solver)
+    solver = SingleCellSolver(model, time, params)
     
     # Assign initial conditions
-    (vs_, vs) = solver.solution_fields()
+    vs_, vs = solver.solution_fields()
     vs_.assign(model.initial_conditions())
 
     # Solve and extract values
-    dt = 0.005
-    interval = (0.0, 10.0)
+    dt = 0.02
+    interval = (0.0, 140000*25)
 
     solutions = solver.solve(interval, dt)
     times = []
     values = []
-    for ((t0, t1), vs) in solutions:
+    for ((t0, t1), vs) in solutions:        # TODO: Unpacking from 3.6?
         times.append(t1)
         values.append(vs.vector().array())
 
@@ -101,7 +99,7 @@ def plot_results(times, values, show=True):
     """
 
 if __name__ == "__main__":
-    tic= systime.time()
+    tic = systime.time()
     times, values = main()
     print(systime.time() - tic)
     plot_results(times, values, show=False)

@@ -2,26 +2,28 @@
 
 from cbcpost import PostProcessor, Field, SolutionField, Restrict
 from cbcpost.utils import create_submesh
-import cbcbeat as beat
-from cbcbeat.cellmodels import AdExManual, NoCellModel
+import xalbrain
+from xalbrain.cellmodels import AdExManual
 import time
 from collections import OrderedDict
 from shock import Shock3D
 from conductivites import IntracellularConductivity, ExtracellularConductivity, Water
 
+import dolfin
+
 
 def setup_general_parameters():
     """Turn on FFC/FEniCS optimizations."""
-    beat.parameters["form_compiler"]["representation"] = "uflacs"
-    beat.parameters["form_compiler"]["cpp_optimize"] = True
+    dolfin.parameters["form_compiler"]["representation"] = "uflacs"
+    dolfin.parameters["form_compiler"]["cpp_optimize"] = True
     flags = ["-O3", "-ffast-math", "-march=native"]
-    beat.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
-    beat.parameters["form_compiler"]["quadrature_degree"] = 3
+    dolfin.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
+    dolfin.parameters["form_compiler"]["quadrature_degree"] = 3
 
 
 def setup_application_parameters():
     """Define parameters for the problem and solvers."""
-    application_parameters = beat.Parameters("Application")
+    application_parameters = dolfin.Parameters("Application")
     application_parameters.add("T", 3e0)                # End time  (ms)
     application_parameters.add("timestep", 1e-2)        # Time step (ms)
     application_parameters.add("directory",
