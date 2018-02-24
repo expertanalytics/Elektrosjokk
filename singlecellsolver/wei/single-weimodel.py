@@ -29,7 +29,7 @@ flags = "-O3 -ffast-math -march=native"
 parameters["form_compiler"]["cpp_optimize_flags"] = flags
 
 
-def main():
+def main(initial_conditions: np.ndarray = None):
     """Solve a single cell model on some time frame."""
 
     model = Wei()
@@ -70,7 +70,9 @@ def main():
         times.append(t1)
         if i % 1000 == 0:
             print(i, vs.vector().norm("l2"))
-        values.append(vs.vector().array())
+        values.append(vs.vector().get_local())
+        if i % 1000000 == 0:
+            print(f"step: {i}", flush=True)
     print("Time to solve: {}".format(start - systime.clock()))
 
     return times, values
@@ -176,10 +178,19 @@ def plot_results(times, values, show=True):
 
 
 if __name__ == "__main__":
+    #ic = np.load("initial_condition.npy")
+    #s_ic = np.load("s_ic.npy")
+    #V_ic = np.load("V_ic.npy")
+    #ic = np.concatenate(((V_ic,), s_ic))
+    #assert False, ic
+
     tic = systime.time()
     times, values = main()
+    #times, values = main(ic[:12])
+    #times, values = main()
     print(systime.time() - tic)
     np.save("solution.npy", values)
     # np.save("initial_condition.npy", values[-1])
     # plot_results(times, values, show=False)
     plot_all(times, values)
+
