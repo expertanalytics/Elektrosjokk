@@ -41,7 +41,7 @@ def main():
     vs_.assign(model.initial_conditions())
 
     # Solve and extract values
-    N = 25*(140000 + 30000)
+    N = 25*(1400 + 300)
     dt = 0.10
     interval = (0.0, N)
     # interval = (0.0, 140000*25)

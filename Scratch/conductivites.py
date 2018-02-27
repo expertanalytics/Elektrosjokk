@@ -47,13 +47,9 @@ class extracellular_conductivity3D(Expression):
     value[8] = 1.0 
 
 
-
-
-
-
 def get_conductivities(nsd): 
-  Mi = intracellular_conductivity2D() 
-  Me = extracellular_conductivity2D()
+  # Mi = intracellular_conductivity2D() 
+  # Me = extracellular_conductivity2D()
   if nsd == 3: 
 #    Mi = intracellular_conductivity3D() 
 #    Me = extracellular_conductivity3D()

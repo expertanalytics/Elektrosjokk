@@ -9,8 +9,12 @@ mesh = Mesh("erika_res32.xml")
 #E12 = E1*E1                                         # make two elements, one for each unknown 
 #W = FunctionSpace(mesh, E12)                        # make finite element space  
 
-V = FunctionSpace(mesh, "Lagrange", 1) 
-W = V*V 
+F_ele = FiniteElement("CG", mesh.ufl_cell(), 1)
+V = FunctionSpace(mesh, F_ele)
+W = FunctionSpace(mesh, MixedElement((F_ele, F_ele)))
+
+#V = FunctionSpace(mesh, "Lagrange", 1) 
+#W = MixedFunctionSpace((V, V))
 
 
 ue, v = TrialFunctions(W) 
@@ -50,12 +54,8 @@ UEV_ = Function(W) # solution on previous timestep
 uefile = File("ue.pvd") 
 vfile = File("v.pvd") 
 
-
-
 assigner = FunctionAssigner(W, [V, V])
 assigner.assign(UEV_, [shock_function, zero_function])
-
-
 
 solver = KrylovSolver("cg", "amg")
 solver.set_operators(A, P)
@@ -66,10 +66,10 @@ while t <= T:
   shock.t = t 
   L = UE_*k*dx + dtc*shock*k*ds  + dt*alpha*UE_*k*dx  
   b = assemble(L) 
-  print b.norm("l2")
+  print("foo", b.norm("l2"))
   solver.solve(UEV.vector(), b) 
 
-  print "time ", t, UEV.vector().norm("l2") 
+  print("time ", t, UEV.vector().norm("l2"))
 
   UEV_.assign(UEV) # update solution on previous time step with current solution 
 
