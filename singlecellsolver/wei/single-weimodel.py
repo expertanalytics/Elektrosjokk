@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import time as systime
-import seaborn as sns
 
 from xalbrain import (
     SingleCellSolver,
@@ -15,8 +14,6 @@ from xalbrain import (
     parameters,
     Wei,
 )
-
-sns.set()
 
 # For computing faster
 parameters["form_compiler"]["cpp_optimize"] = True
@@ -32,7 +29,7 @@ def main():
     # params = BasicSingleCellSolver.default_parameters()
     params = SingleCellSolver.default_parameters()
 
-    params["scheme"] = "RK4"
+    params["scheme"] = "CN2"
     # solver = BasicSingleCellSolver(model, time, params)
     solver = SingleCellSolver(model, time, params)
 
@@ -41,10 +38,15 @@ def main():
     vs_.assign(model.initial_conditions())
 
     # Solve and extract values
-    N = 25*(1400 + 300)
-    dt = 0.10
+    # N = 25*(14000 + 3000)
+
+    dt = 0.02
+    T = 17000
+    N = T/dt + 1
+
+    # N = 6000*0.02
+    # dt = 0.02
     interval = (0.0, N)
-    # interval = (0.0, 140000*25)
 
     start = systime.clock() 
     solutions = solver.solve(interval, dt)
@@ -52,6 +54,8 @@ def main():
     values = []
     for i, ((t0, t1), vs) in enumerate(solutions):        # TODO: Unpacking from 3.6?
         times.append(t1)
+        if i % 1000 == 0:
+            print(i, vs.vector().norm("l2"))
         values.append(vs.vector().array())
     print("Time to solve: {}".format(start - systime.clock()))
 
@@ -80,5 +84,6 @@ if __name__ == "__main__":
     tic = systime.time()
     times, values = main()
     print(systime.time() - tic)
-    np.save("initial_condition.npy", values[-1])
+    np.save("solution.npy", values)
+    # np.save("initial_condition.npy", values[-1])
     plot_results(times, values, show=False)

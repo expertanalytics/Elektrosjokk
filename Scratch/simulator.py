@@ -1,10 +1,9 @@
-
-from fenics import *
+from dolfin import *
 from conductivites import get_conductivities
 from shock import get_shock 
 
-mesh = Mesh("erika_res32.xml")
-#mesh = UnitSquareMesh(20, 20) 
+# mesh = Mesh("erika_res32.xml")
+mesh = UnitCubeMesh(20, 20, 20) 
 #E1 = FiniteElement("Lagrange", mesh.ufl_cell(),  1) # make scalar finite element
 #E12 = E1*E1                                         # make two elements, one for each unknown 
 #W = FunctionSpace(mesh, E12)                        # make finite element space  
@@ -36,28 +35,30 @@ alpha = Constant(10)
 
 dtc = Constant(dt)
 
-a = ue*k*dx  + dtc*(inner(dot(Me,grad(ue)), grad(k)))*dx  \
-             + dtc*(inner(dot(Me,grad(v)), grad(k)))*dx  \
-             + dtc*(inner(dot(Me,grad(ue)), grad(l)))*dx  \
-    +v*l*dx  + dtc*(inner(dot(Mie,grad(v)), grad(l)))*dx  \
+a = ue*k*dx  + dtc*inner(Me*grad(ue), grad(k))*dx  \
+             + dtc*inner(Me*grad(v), grad(k))*dx  \
+             + dtc*inner(Me*grad(ue), grad(l))*dx  \
+    +v*l*dx  + dtc*inner(Mie*grad(v), grad(l))*dx  \
 
-p =   ue*k*dx  + dtc*(inner(dot(Me,grad(ue)), grad(k)))*dx  \
-    + v*l*dx   + dtc*(inner(dot(Mie,grad(v)), grad(l)))*dx  
+# p =   ue*k*dx  + dtc*inner(dot(Me,grad(ue)), grad(k))*dx  \
+#     + v*l*dx   + dtc*inner(dot(Mie,grad(v)), grad(l))*dx  
 
+p =   ue*k*dx  + dtc*inner(Me*grad(ue), grad(k))*dx  \
+    + v*l*dx   + dtc*inner(Mie*grad(v), grad(l))*dx  
 
 A = assemble(a) 
 P = assemble(p) 
 
 
-UEV = Function(W)  # soluiton on current timestep  
-UEV_ = Function(W) # solution on previous timestep  
+UEV = Function(W)   # soluiton on current timestep  
+UEV_ = Function(W)  # solution on previous timestep  
 uefile = File("ue.pvd") 
 vfile = File("v.pvd") 
 
 assigner = FunctionAssigner(W, [V, V])
 assigner.assign(UEV_, [shock_function, zero_function])
 
-solver = KrylovSolver("cg", "amg")
+solver = PETScKrylovSolver("gmres", "petsc_amg")
 solver.set_operators(A, P)
 
 while t <= T: 
@@ -66,6 +67,7 @@ while t <= T:
   shock.t = t 
   L = UE_*k*dx + dtc*shock*k*ds  + dt*alpha*UE_*k*dx  
   b = assemble(L) 
+  b -= b.sum()/b.size()
   print("foo", b.norm("l2"))
   solver.solve(UEV.vector(), b) 
 

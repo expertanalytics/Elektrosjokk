@@ -1,7 +1,13 @@
+import pickle 
 import xalbrain as xb 
 import numpy as np
 
-from wei_initialiser import get_random_time
+from wei_utils import (
+    get_random_time,
+    save_points,
+    pickle_points,
+    get_uniform_ic,
+)
 
 from cbcpost import (
     PostProcessor,
@@ -35,16 +41,16 @@ def setup_cell_model(application_parameters):
     """Define the cell model.
     Optionally change the default parameters of the cell model.
     """
-    # params = xb.cellmodels.Fitzhughnagumo.default_parameters()
-    # return xb.cellmodels.Fitzhughnagumo(params=params)
+    params = xb.cellmodels.Fitzhughnagumo.default_parameters()
+    return xb.cellmodels.Fitzhughnagumo(params=params)
     params = xb.cellmodels.Wei.default_parameters()
-    return xb.cellmodels.Wei(params=params)
+    # return xb.cellmodels.Wei(params=params)
 
 
 def setup_application_parameters():
     """Define parameters for the problem and solvers."""
     application_parameters = xb.Parameters("Application")
-    application_parameters.add("T", 45.0)               # End time  (ms)
+    application_parameters.add("T", 100.0)               # End time  (ms)
     application_parameters.add("timestep", 5e-3)        # Time step (ms)
     application_parameters.add("directory", "results")
     application_parameters.parse()
@@ -104,7 +110,7 @@ def assign_ic(func):
 
 def main():
     application_parameters = setup_application_parameters()
-    brain = setup_brain_model(application_parameters, N=100)
+    brain = setup_brain_model(application_parameters, N=50)
 
     # Customize and create a splitting solver
     splittingSolver_params = xb.SplittingSolver.default_parameters()
@@ -114,7 +120,7 @@ def main():
     splittingSolver_params["theta"] = 0.5    # Second order splitting scheme
     splittingSolver_params["CardiacODESolver"]["scheme"] = "RK4"   # Choose wisely
 
-    splittingSolver_params["BidomainSolver"]["linear_solver_type"] = "direct"
+    splittingSolver_params["BidomainSolver"]["linear_solver_type"] = "iterative"
     splittingSolver_params["BidomainSolver"]["algorithm"] = "gmres"
     splittingSolver_params["BidomainSolver"]["preconditioner"] = "petsc_amg"
     splittingSolver_params["BidomainSolver"]["use_avg_u_constraint"] = False 
@@ -125,22 +131,14 @@ def main():
     # Extract the solution fields and set the initial conditions
     (vs_, vs, vur) = solver.solution_fields()
 
-    # vs_.assign(brain.cell_models().initial_conditions())
 
+    # brain.cell_models().set:initial_conditions(**get_uniform_ic("spike"))
+    # vs_.assign(brain.cell_models().initial_conditions())
     assign_ic(vs_)
 
-    """
-    VS = vs_.function_space()
-    _v, *_ = vs_.split(deepcopy=True)
-    _V = _v.function_space()
-    V = xb.FunctionSpace(_V.mesh(), "CG", 1)
-
-    ic_func = xb.Function(V)
-    ic_func.vector()[:] = -74*np.random.random(ic_func.vector().size())
-
-    assigner = xb.FunctionAssigner(VS.sub(0), V)
-    assigner.assign(vs_.sub(0), ic_func)
-    """
+    values = {str(f): f(0.5, 0.5) for f in vs_.split()}
+    with open("INITIAL_CONDITION.pickle", "wb") as out_handle:
+        pickle.dump(values, out_handle)
 
     # Extract end time and time-step from application parameters
     T = application_parameters["T"]
@@ -160,8 +158,7 @@ def main():
     postprocessor.add_field(SolutionField("v", field_params))
     postprocessor.add_field(SolutionField("u", field_params))
 
-    import dolfin
-    myfile = dolfin.File("last2.pvd")
+    # myfile = xb.File("last2.pvd")
 
     theta = splittingSolver_params["theta"]
 
@@ -172,20 +169,21 @@ def main():
         (vs_, vs, vur) = fields
 
         functions = vs.split()
-        values = [f(0.5, 0.5) for f in functions]
-        print_str = "{:.3e} "*len(values)
-        print(print_str.format(*values))
+        # values = [f(0.5, 0.5) for f in functions]
+        # print_str = "{:.3e} "*len(values)
+        # print(print_str.format(*values))
 
         # theta dependency due to the splitting scheme
         current_t = t0 + theta*(t1 - t0)    
 
         v, u = vur.split(deepcopy=True)
-        # print(v.vector().norm("l2"), u.vector().norm("l2"))
 
-        myfile << functions[4]
+        # myfile << functions[4]
 
-        if i % 5 == 0:
+        if i % 100 == 0:
             postprocessor.update_all({"v": lambda: v, "u": lambda: u}, current_t, i)
+            # postprocessor.update_all({"v": lambda: v}, current_t, i)
+            yield current_t, functions
 
     postprocessor.finalize_all()
 
@@ -193,5 +191,5 @@ def main():
 if __name__ == "__main__":
     setup_general_parameters()
 
-    main()
+    pickle_points(main(), ((0.5, 0.5),), "time_samples")
     print("Success!")
