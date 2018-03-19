@@ -32,8 +32,10 @@ def setup_conductivities(mesh):
     Mi = xb.Function(Q)
     Me = xb.Function(Q)
 
-    Mi.vector()[:] = 1 # np.random.random(Mi.vector().array().size)
-    Me.vector()[:] = 1 # 3*np.random.random(Me.vector().array().size)
+    # Mi.vector()[:] = np.random.random(Mi.vector().array().size)
+    # Me.vector()[:] = 3*np.random.random(Me.vector().array().size)
+    Mi.vector()[:] = 1
+    Me.vector()[:] = 1
     return Mi, Me
 
 
@@ -48,8 +50,8 @@ def setup_cell_model(application_parameters):
 def setup_application_parameters():
     """Define parameters for the problem and solvers."""
     application_parameters = xb.Parameters("Application")
-    application_parameters.add("T", 6000.0)            # (Should be seconds, not ms)
-    application_parameters.add("timestep", 1e-2)       # (should be seconds, not ms)
+    application_parameters.add("T", 10000.0)               # End time  (ms)
+    application_parameters.add("timestep", 5e-2)        # Time step (ms)
     application_parameters.add("directory", "results")
     application_parameters.parse()
     return application_parameters
@@ -108,7 +110,7 @@ def assign_ic(func):
 
 def main():
     application_parameters = setup_application_parameters()
-    brain = setup_brain_model(application_parameters, N=50)
+    brain = setup_brain_model(application_parameters, N=10)
 
     # Customize and create a splitting solver
     splittingSolver_params = xb.SplittingSolver.default_parameters()
@@ -116,24 +118,30 @@ def main():
     # splittingSolver_params["pde_solver"] = "monodomain"
     splittingSolver_params["pde_solver"] = "bidomain"
     splittingSolver_params["theta"] = 0.5    # Second order splitting scheme
-    # splittingSolver_params["CardiacODESolver"]["scheme"] = "RK4"   # Choose wisely
-    splittingSolver_params["CardiacODESolver"]["scheme"] = "BDF1"   # Choose wisely
+    splittingSolver_params["CardiacODESolver"]["scheme"] = "RK4"   # Choose wisely
 
-    splittingSolver_params["MonodomainSolver"]["linear_solver_type"] = "iterative"
-    splittingSolver_params["MonodomainSolver"]["algorithm"] = "gmres"
-    splittingSolver_params["MonodomainSolver"]["preconditioner"] = "petsc_amg"
+    # splittingSolver_params["MonodomainSolver"]["linear_solver_type"] = "iterative"
+    # splittingSolver_params["MonodomainSolver"]["algorithm"] = "cg"
+    # splittingSolver_params["MonodomainSolver"]["preconditioner"] = "petsc_amg"
 
     splittingSolver_params["BidomainSolver"]["linear_solver_type"] = "iterative"
     splittingSolver_params["BidomainSolver"]["algorithm"] = "gmres"
     splittingSolver_params["BidomainSolver"]["preconditioner"] = "petsc_amg"
-    # splittingSolver_params["BidomainSolver"]["use_avg_u_constraint"] = True 
+    splittingSolver_params["BidomainSolver"]["use_avg_u_constraint"] = False 
     splittingSolver_params["apply_stimulus_current_to_pde"] = False    # Second order splitting scheme
+
+    splittingSolver_params["BidomainSolver"]["petsc_krylov_solver"]["absolute_tolerance"] = 1e-14
+    splittingSolver_params["BidomainSolver"]["petsc_krylov_solver"]["relative_tolerance"] = 1e-14
+    splittingSolver_params["BidomainSolver"]["petsc_krylov_solver"]["nonzero_initial_guess"] = True
+    # for key, value in splittingSolver_params["BidomainSolver"]["petsc_krylov_solver"].items():
+    #     print(key, value)
+    # assert False
 
     solver = xb.SplittingSolver(brain, params=splittingSolver_params)
 
     # Extract the solution fields and set the initial conditions
     (vs_, vs, vur) = solver.solution_fields()
-
+    # vs_.assign(brain.cell_models().initial_conditions())
 
     brain.cell_models().set_initial_conditions(**get_uniform_ic("spike"))
     vs_.assign(brain.cell_models().initial_conditions())
@@ -159,7 +167,7 @@ def main():
     )
 
     postprocessor.add_field(SolutionField("v", field_params))
-    postprocessor.add_field(SolutionField("u", field_params))
+    # postprocessor.add_field(SolutionField("u", field_params))
 
     # myfile = xb.File("last2.pvd")
 
@@ -179,17 +187,15 @@ def main():
         # theta dependency due to the splitting scheme
         current_t = t0 + theta*(t1 - t0)    
 
-        funcs = vur.split(deepcopy=True)
-        v = funcs[0]
-        u = funcs[1]
+        # v, u = vur.split(deepcopy=True)
         # v = vur.split(deepcopy=True)
 
         # myfile << functions[4]
 
         if i % 100 == 0:
-            postprocessor.update_all({"v": lambda: v, "u": lambda: u}, current_t, i)
-            # postprocessor.update_all({"v": lambda: vur}, current_t, i)
-            print(i, v.vector().norm("l2"))
+            # postprocessor.update_all({"v": lambda: v, "u": lambda: u}, current_t, i)
+            postprocessor.update_all({"v": lambda: vur}, current_t, i)
+            print(i, vur.vector().norm("l2"))
             yield current_t, functions
 
     postprocessor.finalize_all()

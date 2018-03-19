@@ -83,7 +83,7 @@ def plot_data_dict(data_dict, odir="figures"):
         (29, 30)
     )
 
-    t = np.array(time)/1000     # Convert from (ms) to (s)
+    t = np.array(time)
     for name, _ylabel, title, ylim in zip(names, ylabels, titles, ylimits):
         # fig, ax1 = plt.subplots(1, figsize=(8, 8))
         fig = plt.figure(figsize=(14, 14))
