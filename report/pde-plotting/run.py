@@ -32,8 +32,8 @@ def setup_conductivities(mesh):
     Mi = xb.Function(Q)
     Me = xb.Function(Q)
 
-    Mi.vector()[:] = np.random.random(Mi.vector().array().size)
-    Me.vector()[:] = 3*np.random.random(Me.vector().array().size)
+    Mi.vector()[:] = 1 # np.random.random(Mi.vector().array().size)
+    Me.vector()[:] = 1 # 3*np.random.random(Me.vector().array().size)
     return Mi, Me
 
 
@@ -41,17 +41,15 @@ def setup_cell_model(application_parameters):
     """Define the cell model.
     Optionally change the default parameters of the cell model.
     """
-    params = xb.cellmodels.Fitzhughnagumo.default_parameters()
-    return xb.cellmodels.Fitzhughnagumo(params=params)
     params = xb.cellmodels.Wei.default_parameters()
-    # return xb.cellmodels.Wei(params=params)
+    return xb.cellmodels.Wei(params=params)
 
 
 def setup_application_parameters():
     """Define parameters for the problem and solvers."""
     application_parameters = xb.Parameters("Application")
-    application_parameters.add("T", 100.0)               # End time  (ms)
-    application_parameters.add("timestep", 5e-3)        # Time step (ms)
+    application_parameters.add("T", 6000.0)            # (Should be seconds, not ms)
+    application_parameters.add("timestep", 1e-2)       # (should be seconds, not ms)
     application_parameters.add("directory", "results")
     application_parameters.parse()
     return application_parameters
@@ -62,7 +60,7 @@ def setup_brain_model(application_parameters, N=10):
     # Initialize the computational domain in time and space
     time = xb.Constant(0.0)       # All time dependencies must rely on this instance
     mesh = xb.UnitSquareMesh(N, N)
-    mesh.coordinates()[:] *= 10
+    # mesh.coordinates()[:] *= 10
 
     # Setup conductivities
     (M_i, M_e) = setup_conductivities(mesh)     # The keys match cell_domains.array()
@@ -118,13 +116,18 @@ def main():
     # splittingSolver_params["pde_solver"] = "monodomain"
     splittingSolver_params["pde_solver"] = "bidomain"
     splittingSolver_params["theta"] = 0.5    # Second order splitting scheme
-    splittingSolver_params["CardiacODESolver"]["scheme"] = "RK4"   # Choose wisely
+    # splittingSolver_params["CardiacODESolver"]["scheme"] = "RK4"   # Choose wisely
+    splittingSolver_params["CardiacODESolver"]["scheme"] = "BDF1"   # Choose wisely
+
+    splittingSolver_params["MonodomainSolver"]["linear_solver_type"] = "iterative"
+    splittingSolver_params["MonodomainSolver"]["algorithm"] = "gmres"
+    splittingSolver_params["MonodomainSolver"]["preconditioner"] = "petsc_amg"
 
     splittingSolver_params["BidomainSolver"]["linear_solver_type"] = "iterative"
     splittingSolver_params["BidomainSolver"]["algorithm"] = "gmres"
     splittingSolver_params["BidomainSolver"]["preconditioner"] = "petsc_amg"
-    splittingSolver_params["BidomainSolver"]["use_avg_u_constraint"] = False 
-    splittingSolver_params["apply_stimulus_current_to_pde"] = True    # Second order splitting scheme
+    # splittingSolver_params["BidomainSolver"]["use_avg_u_constraint"] = True 
+    splittingSolver_params["apply_stimulus_current_to_pde"] = False    # Second order splitting scheme
 
     solver = xb.SplittingSolver(brain, params=splittingSolver_params)
 
@@ -132,9 +135,9 @@ def main():
     (vs_, vs, vur) = solver.solution_fields()
 
 
-    # brain.cell_models().set:initial_conditions(**get_uniform_ic("spike"))
-    # vs_.assign(brain.cell_models().initial_conditions())
-    assign_ic(vs_)
+    brain.cell_models().set_initial_conditions(**get_uniform_ic("spike"))
+    vs_.assign(brain.cell_models().initial_conditions())
+    # assign_ic(vs_)
 
     values = {str(f): f(0.5, 0.5) for f in vs_.split()}
     with open("INITIAL_CONDITION.pickle", "wb") as out_handle:
@@ -176,13 +179,17 @@ def main():
         # theta dependency due to the splitting scheme
         current_t = t0 + theta*(t1 - t0)    
 
-        v, u = vur.split(deepcopy=True)
+        funcs = vur.split(deepcopy=True)
+        v = funcs[0]
+        u = funcs[1]
+        # v = vur.split(deepcopy=True)
 
         # myfile << functions[4]
 
         if i % 100 == 0:
             postprocessor.update_all({"v": lambda: v, "u": lambda: u}, current_t, i)
-            # postprocessor.update_all({"v": lambda: v}, current_t, i)
+            # postprocessor.update_all({"v": lambda: vur}, current_t, i)
+            print(i, v.vector().norm("l2"))
             yield current_t, functions
 
     postprocessor.finalize_all()

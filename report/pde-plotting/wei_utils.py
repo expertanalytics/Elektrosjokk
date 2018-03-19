@@ -25,8 +25,8 @@ def get_uniform_ic(state="flat", filename="REFERENCE_SOLUTION.npy", seed=42):
     else:
         assert False, f"Expected state in ('spike', 'flat', 'random'), fountd {state}"
 
-    names = ("V", "m", "h", "n", "Nko", "Nki", "NNao", "NNai", "NClo", "NCli", "vol", "O")
-    return{(name, val) for name, val in zip(names, data[idx])}
+    names = ("V", "m", "h", "n", "NKo", "NKi", "NNao", "NNai", "NClo", "NCli", "vol", "O")
+    return {name: val for name, val in zip(names, data[idx])}
 
 
 def save_points(functions_generator, points, filename):
