@@ -185,7 +185,7 @@ def main():
         # print(print_str.format(*values))
 
         # theta dependency due to the splitting scheme
-        current_t = t0 + theta*(t1 - t0)    
+        current_t = t0 + theta*(t1 - t0)
 
         # v, u = vur.split(deepcopy=True)
         # v = vur.split(deepcopy=True)
@@ -195,7 +195,7 @@ def main():
         if i % 100 == 0:
             # postprocessor.update_all({"v": lambda: v, "u": lambda: u}, current_t, i)
             postprocessor.update_all({"v": lambda: vur}, current_t, i)
-            print(i, vur.vector().norm("l2"))
+            print(i, vur.vector().norm("l2"), flush=True)
             yield current_t, functions
 
     postprocessor.finalize_all()

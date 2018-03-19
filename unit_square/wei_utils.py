@@ -23,7 +23,7 @@ def get_uniform_ic(state="flat", filename="REFERENCE_SOLUTION.npy", seed=42):
         rngesus = np.random.RandomState(seed)
         idx = rngesus.randint(0, data.shape[0] - 1)
     else:
-        assert False, f"Expected state in ('spike', 'flat', 'random'), fountd {state}"
+        assert False, "Expected state in ('spike', 'flat', 'random'), fountd {}".format(state)
 
     names = ("V", "m", "h", "n", "NKo", "NKi", "NNao", "NNai", "NClo", "NCli", "vol", "O")
     return {name: val for name, val in zip(names, data[idx])}
