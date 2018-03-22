@@ -4,3 +4,7 @@ from .wei_utils import (
     wei_uniform_ic,
     create_dataframe,
 )
+
+from .cellmodel_preprocessing import (
+    preprocess_wei,
+)

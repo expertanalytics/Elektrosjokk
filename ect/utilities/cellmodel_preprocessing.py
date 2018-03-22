@@ -12,18 +12,16 @@ from typing import (
     Dict,
 )
 
+from ect.specs import Data_spec
+
 
 logger = logging.getLogger(name=__name__)
 
 
-Data_spec = namedTuple("data_spec", ("data", "label", "title", "ylabel"))
-
-
-def plot_wei(
-        time_array: np.ndarray,
+def preprocess_wei(
         values: np.ndarray,
         params: Dict[str, float]
-) -> Tuple[np.ndarray, np.ndarray, Axis_spec]:
+) -> Data_spec:
     """Preprocess the Wei cell model for plotting."""
     vol = params["vol"]
     beta0 = params["beta0"]
@@ -40,7 +38,7 @@ def plot_wei(
     values[:, 10] /= volo
 
     # NB! This relies on tiny dicts being ordered
-    varible_dict = {
+    variable_dict = {
         "V": (r"Transmembrane potential", "mV"),
         "m": (r"Voltage Gate (m)", "mV"),
         "h": (r"Voltage Gate (n)", "mV"),
@@ -59,4 +57,4 @@ def plot_wei(
     }
 
     for i, name in enumerate(("V", "m", "h", "n", "Ko", "Ki", "Nao", "Nai", "Clo", "Cli", "beta", "O")):
-        yield time_array, Data_spec(values[:, i], name, *variable_dict[name])
+        yield Data_spec(values[:, i], name, *variable_dict[name])

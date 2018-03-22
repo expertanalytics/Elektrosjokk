@@ -6,8 +6,9 @@ import numpy as np
 import pandas as pd
 
 
-from Typing import (
+from typing import (
     Iterable,
+    Tuple,
 )
 
 from xalbrain import (
@@ -53,9 +54,9 @@ def wei_uniform_ic(data: np.ndarray, state: str, index: int = None):
 def create_dataframe(
         solutions: Iterable[Tuple[Tuple[float], Tuple[Function]]],
         names: Tuple[str],
-        point: Tuplel[float],
+        point: Tuple[float],
         stride: int = 1
-) -> pd.dataframe:
+) -> pd.DataFrame:
     """Evalueate solutiuons at a point and store every `stride` timestep in a dataframe.
 
     Args:
