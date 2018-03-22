@@ -5,11 +5,13 @@ import matplotlib as mpl
 mpl.use("agg")
 
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 font = {
     "family": "ubuntu",
 }
+
 
 mpl.rc('font', **font)
 
@@ -17,10 +19,6 @@ mpl.rc('font', **font)
 def unpickle_data(filename="time_samples.pickle"):
     with open(filename, "rb") as in_handle:
         data_dict = pickle.load(in_handle)
-    return data_dict
-
-
-def plot_data_dict(data_dict, odir="figures"):
     points = data_dict["points"]
     time = tuple(filter(lambda x: x != "points", data_dict.keys()))
 
@@ -29,20 +27,27 @@ def plot_data_dict(data_dict, odir="figures"):
         for key in data_dict[t]:
             function_dict[key].append(np.array(data_dict[t][key]))
     np.vstack(function_dict["vs-0"])
-    plot_dict = {key: np.vstack(value) for key, value in function_dict.items()}
+    return {key: np.vstack(value) for key, value in function_dict.items()}
 
+
+def load_txt(filename="filename"):
+    return np.loadtxt(filename, delimiter=",")
+
+
+def plot_data_dict(data_matrix, odir="figures"):
+    time = data_matrix[:, 0]
     vol = 1.4368e-15
-    voli = plot_dict["vs-10"]
+    voli = data_matrix[:, 11]
     beta0 = 7
     volo = (1 + 1/beta0)*vol - voli
-    plot_dict["vs-10"] = voli/volo
 
-    plot_dict["vs-4"] /= volo
-    plot_dict["vs-5"] /= voli
-    plot_dict["vs-6"] /= volo
-    plot_dict["vs-7"] /= voli
-    plot_dict["vs-8"] /= volo
-    plot_dict["vs-9"] /= voli
+    data_matrix[:, 5] /= volo
+    data_matrix[:, 6] /= voli
+    data_matrix[:, 7] /= volo
+    data_matrix[:, 8] /= voli
+    data_matrix[:, 9] /= volo
+    data_matrix[:, 10] /= voli
+    data_matrix[:, 11] = voli/volo
 
     titles = (
         r"Transmembrane potential", r"Voltage Gate (m)", r"Voltage Gate (n)", r"Voltage Gate (h)",
@@ -68,32 +73,13 @@ def plot_data_dict(data_dict, odir="figures"):
         "O": "vs-11"
     }
 
-    ylimits = (     # This did not wok particularity well
-        (-140, -40),
-        (0, 1),
-        (0, 1),
-        (0, 1),
-        (0, 12),
-        (100, 150),
-        (140, 160),
-        (15, 20),
-        (110, 135),
-        (5, 10),
-        (6, 8),
-        (29, 30)
-    )
-
-    t = np.array(time)
-    for name, _ylabel, title, ylim in zip(names, ylabels, titles, ylimits):
-        # fig, ax1 = plt.subplots(1, figsize=(8, 8))
+    for i, (name, _ylabel, title) in enumerate(zip(names, ylabels, titles), 1):
         fig = plt.figure(figsize=(14, 14))
         ax1 = fig.add_subplot(111)
         fig.suptitle(title, size=52)
-        # for i in range(3):
-        i = 0
-        data = plot_dict[names[name]][:, i]        # axis 1 is over sample points
+        data = data_matrix[:, i]        # axis 1 is over sample points
 
-        ax1.plot(t, data, label=f"{name}", linewidth=4)
+        ax1.plot(time, data, label="{name}".format(name=name), linewidth=4)
         ax1.set_ylabel(_ylabel, size=48)
         ax1.set_xlabel("Time (s)", size=48)
         ax1.grid()
@@ -112,10 +98,11 @@ def plot_data_dict(data_dict, odir="figures"):
 
         # ax1.set_ylim(ylim)
         # ax1.legend(loc="best", prop={"size": 24})
-        fig.savefig(f"{odir}/{name}_pde.png")
+        fig.savefig("{odir}/{name}_pde.png".format(odir=odir, name=name))
         plt.close(fig)
 
 
 if __name__ == "__main__":
-    my_data = unpickle_data()
+    # my_data = unpickle_data()
+    my_data = load_txt("time_samples.txt")
     foo = plot_data_dict(my_data)

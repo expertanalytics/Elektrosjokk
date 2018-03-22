@@ -29,19 +29,16 @@ def get_uniform_ic(state="flat", filename="REFERENCE_SOLUTION.npy", seed=42):
     return {name: val for name, val in zip(names, data[idx])}
 
 
-def save_points(functions_generator, points, filename):
+def save_points(functions_generator, point, filename):
     # line_template = "{name}: {value}, "*len(functions)    # geberator has no length
 
     with open(filename, "w") as ofile:
-        for functions in functions_generator:
-            line = ""
-            for i, f in enumerate(functions, 1):
-                values = [f(p1, p2) for p1, p2 in points]
-                line += "; {}: ".format(f)
-                val_template = "{}, "*len(values)
-                line += val_template.format(*values)
-                if i % 2 == 0:
-                    break
+        p1, p2 = point
+        for time, functions in functions_generator:
+            line = "{time}".format(time=time)
+            for f in functions:
+                val = f(p1, p2)
+                line += ", {val}".format(val=val)
             ofile.write(line + "\n")
 
 

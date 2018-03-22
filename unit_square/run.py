@@ -34,8 +34,8 @@ def setup_conductivities(mesh):
 
     # Mi.vector()[:] = np.random.random(Mi.vector().array().size)
     # Me.vector()[:] = 3*np.random.random(Me.vector().array().size)
-    Mi.vector()[:] = 1
-    Me.vector()[:] = 1
+    Mi.vector()[:] = 1e2
+    Me.vector()[:] = 1e2
     return Mi, Me
 
 
@@ -103,7 +103,7 @@ def assign_ic(func):
     for i, f in enumerate(functions):
         ic_func = xb.Function(V)
         ic_func.vector()[:] = np.array(ic[:, i])
-    
+
         assigner = xb.FunctionAssigner(mixed_func_space.sub(i), V)
         assigner.assign(func.sub(i), ic_func)
 
@@ -117,7 +117,8 @@ def main():
 
     # splittingSolver_params["pde_solver"] = "monodomain"
     splittingSolver_params["pde_solver"] = "bidomain"
-    splittingSolver_params["theta"] = 0.5    # Second order splitting scheme
+    splittingSolver_params["theta"] = 0.0    # Second order splitting scheme
+    # splittingSolver_params["theta"] = 0.5    # Second order splitting scheme
     splittingSolver_params["CardiacODESolver"]["scheme"] = "RK4"   # Choose wisely
 
     # splittingSolver_params["MonodomainSolver"]["linear_solver_type"] = "iterative"
@@ -155,6 +156,7 @@ def main():
     T = application_parameters["T"]
     k_n = application_parameters["timestep"]
 
+    """
     postprocessor = PostProcessor(dict(casedir="test", clean_casedir=True))
     postprocessor.store_mesh(brain.domain())
 
@@ -168,8 +170,7 @@ def main():
 
     postprocessor.add_field(SolutionField("v", field_params))
     # postprocessor.add_field(SolutionField("u", field_params))
-
-    # myfile = xb.File("last2.pvd")
+    """
 
     theta = splittingSolver_params["theta"]
 
@@ -194,15 +195,16 @@ def main():
 
         if i % 100 == 0:
             # postprocessor.update_all({"v": lambda: v, "u": lambda: u}, current_t, i)
-            postprocessor.update_all({"v": lambda: vur}, current_t, i)
+            # postprocessor.update_all({"v": lambda: vur}, current_t, i)
             print(i, vur.vector().norm("l2"), flush=True)
             yield current_t, functions
 
-    postprocessor.finalize_all()
+    # postprocessor.finalize_all()
 
 
 if __name__ == "__main__":
     setup_general_parameters()
 
-    pickle_points(main(), ((0.5, 0.5),), "time_samples")
+    save_points(main(), (0.5, 0.5), "time_samples.txt")
+    #  pickle_points(main(), ((0.5, 0.5),), "time_samples")
     print("Success!")
