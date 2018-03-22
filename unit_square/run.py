@@ -50,8 +50,8 @@ def setup_cell_model(application_parameters):
 def setup_application_parameters():
     """Define parameters for the problem and solvers."""
     application_parameters = xb.Parameters("Application")
-    application_parameters.add("T", 10000.0)               # End time  (ms)
-    application_parameters.add("timestep", 5e-2)        # Time step (ms)
+    application_parameters.add("T", 100.0)               # End time  (ms)
+    application_parameters.add("timestep", 5e-4)        # Time step (ms)
     application_parameters.add("directory", "results")
     application_parameters.parse()
     return application_parameters
@@ -117,8 +117,7 @@ def main():
 
     # splittingSolver_params["pde_solver"] = "monodomain"
     splittingSolver_params["pde_solver"] = "bidomain"
-    splittingSolver_params["theta"] = 0.0    # Second order splitting scheme
-    # splittingSolver_params["theta"] = 0.5    # Second order splitting scheme
+    splittingSolver_params["theta"] = 0.5    # Second order splitting scheme
     splittingSolver_params["CardiacODESolver"]["scheme"] = "RK4"   # Choose wisely
 
     # splittingSolver_params["MonodomainSolver"]["linear_solver_type"] = "iterative"
@@ -193,7 +192,7 @@ def main():
 
         # myfile << functions[4]
 
-        if i % 100 == 0:
+        if i % 1 == 0:
             # postprocessor.update_all({"v": lambda: v, "u": lambda: u}, current_t, i)
             # postprocessor.update_all({"v": lambda: vur}, current_t, i)
             print(i, vur.vector().norm("l2"), flush=True)

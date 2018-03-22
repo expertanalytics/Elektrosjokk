@@ -16,7 +16,8 @@ def get_random_time(N, seed=42):
 def get_uniform_ic(state="flat", filename="REFERENCE_SOLUTION.npy", seed=42):
     data = get_solution()
     if state == "spike":
-        idx = 189800
+        # idx = 190000
+        idx = 192100
     elif state == "flat":
         idx = 201500
     elif state == "random":

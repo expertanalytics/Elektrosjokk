@@ -50,7 +50,7 @@ def main(initial_conditions: np.ndarray = None):
     # Solve and extract values
     # N = 25*(14000 + 3000)
 
-    dt = 0.05
+    dt = 5e-4
     # T = 1500 
     # N = T/dt + 1
     # assert False, N
@@ -59,7 +59,7 @@ def main(initial_conditions: np.ndarray = None):
     # N = 6000*0.02
     # dt = 0.02
     # interval = (0.0, N)
-    T = 10000.0
+    T = 100.0
     interval = (0.0, T)
 
     start = systime.clock() 
@@ -68,12 +68,12 @@ def main(initial_conditions: np.ndarray = None):
     values = []
     for i, ((t0, t1), vs) in enumerate(solutions):        # TODO: Unpacking from 3.6?
         times.append(t1)
-        if i % 1000 == 0:
+        if i % 1 == 0:
             print(i, vs.vector().norm("l2"))
         values.append(vs.vector().get_local())
-        if i % 1000000 == 0:
+        if i % 1 == 0:
             print(f"step: {i}", flush=True)
-    print("Time to solve: {}".format(start - systime.clock()))
+    print("Time to solve: {}".format(systime.clock() - start))
 
     return times, values
 
