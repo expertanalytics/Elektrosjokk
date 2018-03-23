@@ -1,1 +1,1 @@
-from .data_specs import Data_spec
+from .data_specs import Plot_spec

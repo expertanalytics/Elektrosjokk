@@ -14,12 +14,14 @@ from typing import (
     Tuple,
 )
 
+from ect.specs import Plot_spec
+
 
 logger = logging.getLogger(name=__name__)
 
 
 def plot_cell_model(
-        data_spec_tuple: Tuple[Any],
+        plot_spec: Plot_spec,
         time: np.ndarray,
         outdir: str,
         save_format="png"
@@ -28,18 +30,17 @@ def plot_cell_model(
 
     Create a plot from each line in data_spec_tuple.
     """
-    _data_spec_tuple = tuple(data_spec_tuple)
     # Create figure and axis
     fig = plt.figure(figsize=(14, 14))
     ax1 = fig.add_subplot(111)
     ax1.grid(True)  # ???
+    fig.suptitle(plot_spec.title, size=52)
 
-    for data_spec in data_spec_tuple:
-        fig.suptitle(data_spec.title, size=52)
+    # if there are more legends
+    for data, label in tuple(plot_spec.line):
+        ax1.plot(time, data, label=label, linewidth=4)
 
-        # Plot the data
-        ax1.plot(time, data_spec.data, label=data_spec.label, linewidth=4)
-    ax1.set_ylabel(data_spec.ylabel, size=48)
+    ax1.set_ylabel(plot_spec.ylabel, size=48)
     ax1.set_xlabel("Time (s)", size=48)
 
     ax1.legend(loc="best", fontsize=22)
@@ -59,5 +60,5 @@ def plot_cell_model(
     tx.set_fontsize(28)
     ty.set_fontsize(28)
     Path(f"{outdir}").mkdir(parents=True, exist_ok=True)
-    fig.savefig(f"{outdir}/{data_spec.label}.{save_format}")
+    fig.savefig(f"{outdir}/{plot_spec.name}.{save_format}")
     plt.close(fig)
