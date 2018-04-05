@@ -9,9 +9,19 @@ from ect.specs import (
     PDESimulationSpec,
 )
 
+from ect.utilities import (
+    NonuniformIC,
+    new_assign_ic,
+)
+
 from typing import (
     Dict,
     Tuple,
+)
+
+from cbcpost import (
+    PostProcessor,
+    SolutionField
 )
 
 
@@ -23,11 +33,12 @@ def solve_pde(
         pde_parameters: PDESolverSpec,
         simulation_pec: PDESimulationSpec,
         field_spec: SolutionFieldSpec,
-        initial_conditions: Dict[str, float] = None,
-        verbose: bool = True
+        uniform_ic: Dict[str, float] = None,
+        nonuniform_ic_generator: NonuniformIC = None,
+        outdir: str = None
 ) -> Tuple[float, Tuple[xb.Function]]:
     """Solve the bidomain model coupled with an ode."""
-
+    # FIXME: This is ugly
     # Customize and create a splitting solver
     splitting_params = xb.SplittingSolver.default_parameters()
     splitting_params["pde_solver"] = "bidomain"
@@ -52,24 +63,29 @@ def solve_pde(
     solver = xb.SplittingSolver(brain, params=splitting_params)
 
     # Extract the solution fields and set the initial conditions
-    (vs_, vs, vur) = solver.solution_fields()
-    # vs_.assign(brain.cell_models().initial_conditions())
+    vs_, vs, vur = solver.solution_fields()
 
-    if initial_conditions is not None:
-        brain.cell_models().set_initial_conditions(**initial_conditions)
-    vs_.assign(brain.cell_models().initial_conditions())        # Use defaults
-    # assign_ic(vs_)        # TODO: this need another interface
+    if uniform_ic is not None:
+        brain.cell_models().set_initial_conditions(**uniform_ic)
+        vs_.assign(brain.cell_models().initial_conditions())
+    elif nonuniform_ic_generator is not None:
+        new_assign_ic(vs_, nonuniform_ic_generator)
+    else:
+        # Use default ICs
+        vs_.assign(brain.cell_models().initial_conditions())        # Use defaults
 
     # Extract end time and time-step from application parameters
     end_time = simulation_pec.end_time
     dt = simulation_pec.timestep
 
-    # postprocessor = PostProcessor(dict(casedir="test", clean_casedir=True))
-    # postprocessor.store_mesh(brain.domain())
-
-    # postprocessor.add_field(SolutionField("v", SolutionFieldSpec._asdict()))
-    # postprocessor.add_field(SolutionField("u", SolutionFieldSpec._asdict()))
-    # postprocessor.add_field(SolutionField("s", SolutionFieldSpec._asdict()))
+    postprocessor = None
+    if outdir is not None:
+        postprocessor = PostProcessor(dict(casedir=outdir, clean_casedir=True))
+        postprocessor.store_mesh(brain.mesh)
+        postprocessor.add_field(SolutionField("v", field_spec._asdict()))
+        postprocessor.add_field(SolutionField("u", field_spec._asdict()))
+        # TODO: What about state variables?
+        # postprocessor.add_field(SolutionField("s", SolutionFieldSpec._asdict()))
 
     theta = pde_parameters.theta
     # Solve forward problem
@@ -78,17 +94,14 @@ def solve_pde(
         functions = vs.split()
         current_t = t0 + theta*(t1 - t0)
 
-        # v, u = vur.split(deepcopy=True)
-        # v = vur.split(deepcopy=True)
+        if postprocessor is not None:
+            v, u = vur.split(deepcopy=True)
+            postprocessor.update_all({"v": lambda: v, "u": lambda: u}, current_t, i)
+            # postprocessor.update_all({"vs": lambda: vs}, current_t, i)
 
         logger.debug(f"step: {i}, norm: {vur.vector().norm('l2')}")
-        if i % int(field_spec.stride_timestep) == 0:
-            if verbose:
-                print("timestep {:<10}/{:>10}".format(i, N))
-            logger.info("timestep {:>10}/{:>10}".format(i, N))
-            # postprocessor.update_all({"v": lambda: v, "u": lambda: u}, current_t, i)
-            # postprocessor.update_all({"vur": lambda: vur}, current_t, i)
-            # postprocessor.update_all({"vs": lambda: vs}, current_t, i)
-            yield current_t, functions
+        logger.info("timestep {:>10}/{:>10}".format(i, N))
+        yield current_t, functions
 
-    # postprocessor.finalize_all()
+    if postprocessor is not None:
+        postprocessor.finalize_all()

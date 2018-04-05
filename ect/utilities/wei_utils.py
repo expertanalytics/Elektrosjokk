@@ -29,15 +29,16 @@ def get_solution(*_, name: str) -> np.ndarray:
     return np.load(name)
 
 
-def nonuniform_ic(data: np.ndarray, N: int, seed: int = 42) -> np.ndarray:
-    """Draw N random numbers from `data`"""
+def chaotic_ic(data: np.ndarray, N: int, seed: int = 42) -> np.ndarray:
+    """Draw N random numbers from `data`."""
     rngesus = np.random.RandomState(seed)
     indices = rngesus.random_integers(0, data.shape[0] - 1, size=N)
     return data[indices]
 
 
 def wei_uniform_ic(data: np.ndarray, state: str, index: int = None):
-    """Return a map {function name: initial condition} for the Wei cell model.
+    """
+    Return a map {function name: initial condition} for the Wei cell model.
 
     If `index` is specified, `state` is ignored.
     """
@@ -59,7 +60,8 @@ def create_dataframe(
         point: Tuple[float],
         stride: int = 1
 ) -> pd.DataFrame:
-    """Evalueate solutiuons at a point and store every `stride` timestep in a dataframe.
+    """
+    Evalueate solutiuons at a point and store every `stride` timestep in a dataframe.
 
     Args:
         solutions: (t0, t1), solution). Here, solutions is a tuple of `Function`. The
