@@ -15,13 +15,12 @@ mpl.rc('font', **font)
 
 
 def plot_data_dict(data, odir="figures"):
-    time = np.linspace(0, data.shape[0]/50 - 1, data.shape[0])
+    time = np.linspace(0, 100, data.shape[0])
 
     vol = 1.4368e-15
     voli = data[:, 10]
     beta0 = 7
     volo = (1 + 1/beta0)*vol - voli
-    data[:, 10] = voli/volo
 
     data[:, 4] /= volo
     data[:, 5] /= voli
@@ -29,6 +28,8 @@ def plot_data_dict(data, odir="figures"):
     data[:, 7] /= voli
     data[:, 8] /= volo
     data[:, 9] /= voli
+
+    data[:, 10] /= volo
 
     titles = (
         r"Transmembrane potential", r"Voltage Gate (m)", r"Voltage Gate (n)", r"Voltage Gate (h)",

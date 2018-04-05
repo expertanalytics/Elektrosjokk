@@ -1,5 +1,6 @@
 """Get initial conditions based on a reference solution."""
 
+import logging
 
 import pickle
 import numpy as np
@@ -14,6 +15,8 @@ from typing import (
 from xalbrain import (
     Function,
 )
+
+logger = logging.getLogger(name=__name__)
 
 
 def get_solution(*_, name: str) -> np.ndarray:
@@ -38,9 +41,8 @@ def wei_uniform_ic(data: np.ndarray, state: str, index: int = None):
 
     If `index` is specified, `state` is ignored.
     """
-    data = get_solution()
     state_dict = {
-        "fire": 192100,
+        "fire": 192340,
         "flat": 201500
     }
     if index is None:
@@ -48,7 +50,7 @@ def wei_uniform_ic(data: np.ndarray, state: str, index: int = None):
 
     # The names are Wei model specific.
     names = ("V", "m", "h", "n", "NKo", "NKi", "NNao", "NNai", "NClo", "NCli", "vol", "O")
-    return {name: val for name, val in zip(names, data[idx])}
+    return {name: val for name, val in zip(names, data[index])}
 
 
 def create_dataframe(
@@ -67,10 +69,10 @@ def create_dataframe(
         stride (optional): Skip every `stride` timestep.
     """
     columns = ["time"] + list(names)
-    dataframe = pd.DataFrame([], columns=columns)
+    dataframe = pd.DataFrame(columns=columns)
 
-    for i, ((t0, t1), solution) in enumerate(solution_generator):
+    for i, (t1, solution) in enumerate(solutions):
         if i % int(stride) == 0:
             # Store the time, f(p0, p1) for each variable in the solution
-            dataframe.iloc[i] = [t1] + [f(*point) for f in solution]
+            dataframe.loc[i] = [t1] + [f(*point) for f in solution]
     return dataframe

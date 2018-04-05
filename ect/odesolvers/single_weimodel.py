@@ -7,9 +7,10 @@ from xalbrain import (
     Constant,
     Parameters,
     Function,
+    CardiacCellModel,
 )
 
-from Typing import (
+from typing import (
     Dict,
     Tuple,
 )
@@ -20,9 +21,9 @@ logger = logging.getLogger(__name__)
 
 def fenics_ode_solver(
         model: CardiacCellModel,
-        ic: Dict[str, float] = None,
-        interval: Tuple[float],
         dt: float,
+        interval: Tuple[float],
+        ic: Dict[str, float] = None,
         params: Parameters = None
 ) -> Tuple[float, Function]:
     """Solve a single cell model in a specified time interval.
@@ -48,13 +49,15 @@ def fenics_ode_solver(
     if ic is None:
         ic = model.initial_conditions()
 
+    t0, _ = interval
     time = Constant(t0)
 
+    solver = SingleCellSolver(model, time, params)
     vs_, vs = solver.solution_fields()
     model.set_initial_conditions(**ic)
     vs_.assign(model.initial_conditions())
 
-    interval = (t0, t1)
+
     
     for (t0, t1), solution in solver.solve(interval, dt):
-        yield (t0, t1), solution
+        yield t1, solution.vector().get_local()[:model.num_states() + 1]

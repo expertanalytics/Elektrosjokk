@@ -117,3 +117,5 @@ data/
 log
 test/
 figures/
+
+*.pkl
