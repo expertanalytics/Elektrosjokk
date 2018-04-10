@@ -11,5 +11,6 @@ from .cellmodel_preprocessing import (
 
 from .assigner import (
     new_assign_ic,
+    assign_ic,
     NonuniformIC
 )

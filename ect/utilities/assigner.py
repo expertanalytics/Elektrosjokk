@@ -57,16 +57,21 @@ def new_assign_ic(
         assigner.assign(receiving_function.sub(i), xb.project(ic, V))
 
 
-def assign_ic(func):
+def assign_ic(func, data):
     mixed_func_space = func.function_space()
 
     functions = func.split(deepcopy=True)
-    ic = get_random_time(functions[0].vector().size())
     V = xb.FunctionSpace(mixed_func_space.mesh(), "CG", 1)
+    ic_indices = np.random.randint(
+        0,
+        data.shape[0],
+        size=functions[0].vector().local_size()
+    )
+    _data = data[ic_indices]
 
     for i, f in enumerate(functions):
         ic_func = xb.Function(V)
-        ic_func.vector()[:] = np.array(ic[:, i])
+        ic_func.vector()[:] = np.array(_data[:, i])
 
         assigner = xb.FunctionAssigner(mixed_func_space.sub(i), V)
         assigner.assign(func.sub(i), ic_func)
