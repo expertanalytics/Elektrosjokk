@@ -25,7 +25,9 @@ def read_hdf5_functions(
 ) -> dolfin.Function:
     """Read functions from a hdf5file."""
     V = dolfin.FunctionSpace(mesh, family, degree)
-    v = dolfin.Function(V)
+    S = dolfin.VectorFunctionSpace(mesh, "CG", 1, 12)
+    v = dolfin.Function(S)
+
     with dolfin.HDF5File(mesh.mpi_comm(), filename, "r") as hdf5file:
         for name in fields:
             hdf5file.read(v, name)

@@ -10,7 +10,7 @@ from .cellmodel_preprocessing import (
 )
 
 from .assigner import (
-    new_assign_ic,
+    project_ic,
     assign_ic,
     NonuniformIC
 )

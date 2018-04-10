@@ -26,7 +26,7 @@ class NonuniformIC:
             yield lambda x: np.interp(x, self.coordinates, self.data[:, i])
 
 
-def new_assign_ic(
+def project_ic(
         receiving_function: xb.Function,
         ic_generator: NonuniformIC,
         degree: int = 1

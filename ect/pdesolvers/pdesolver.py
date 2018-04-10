@@ -11,7 +11,7 @@ from ect.specs import (
 
 from ect.utilities import (
     NonuniformIC,
-    new_assign_ic,
+    project_ic,
 )
 
 from typing import (
@@ -69,7 +69,7 @@ def solve_pde(
         brain.cell_models().set_initial_conditions(**uniform_ic)
         vs_.assign(brain.cell_models().initial_conditions())
     elif nonuniform_ic_generator is not None:
-        new_assign_ic(vs_, nonuniform_ic_generator)
+        project_ic(vs_, nonuniform_ic_generator)
     else:
         # Use default ICs
         vs_.assign(brain.cell_models().initial_conditions())        # Use defaults
@@ -84,8 +84,6 @@ def solve_pde(
         postprocessor.store_mesh(brain.mesh)
         postprocessor.add_field(SolutionField("v", field_spec._asdict()))
         postprocessor.add_field(SolutionField("u", field_spec._asdict()))
-        # TODO: What about state variables?
-        # postprocessor.add_field(SolutionField("s", SolutionFieldSpec._asdict()))
 
     theta = pde_parameters.theta
     # Solve forward problem

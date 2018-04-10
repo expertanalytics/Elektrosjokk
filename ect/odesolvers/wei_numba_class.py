@@ -16,11 +16,11 @@ SPEC = [
 ]
 
 
-@jitclass(SPEC)
-class Wei_compiled:
+# @jitclass(SPEC)
+class Wei:
     """RK4 solver of the cell model described by in Wei et. al 2014."""
 
-    def __init__(self, ic: Tuple[Float64], T: float, dt: float) ->  None:
+    def __init__(self, ic: Tuple[float64], T: float, dt: float) ->  None:
         """
         Args:
             ic: Initial condition of shape 12. The parameters come in the
@@ -28,9 +28,9 @@ class Wei_compiled:
             T: End time.
             dt: Time step.
 
-        The solver will create an array in [0, T] og size int(T/dt) - 1.
+        The solver will create an array in [0, T] og size int(T/dt).
         """
-        self.t_array = np.linspace(0, T, int(T/dt) - 1)
+        self.t_array = np.linspace(0, T, int(T/dt))
         self.y_array = np.zeros(shape=(self.t_array.size, 12))
         self.y_array[0] = ic
 
@@ -208,6 +208,7 @@ if __name__ == "__main__":
 
     O = 29.3            # Initial oxygen concentration  [mg/L]
     ic = np.array((v, m, h, n, NKo, NKi, NNao, NNai, NClo, NCli, vol, O))
+    Wei_compiled = jitclass(SPEC)(Wei)
     solver = Wei_compiled(ic, T=2.0, dt=1e-2)
     solver.solve()
     print((solver.solution == 0).any())
