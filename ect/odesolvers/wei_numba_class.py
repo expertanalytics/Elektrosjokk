@@ -16,9 +16,8 @@ SPEC = [
 ]
 
 
-# @jitclass(SPEC)
-class Wei:
-    """RK4 solver of the cell model described by in Wei et. al 2014."""
+class ODESolver:
+    """RK4 solver for (vector) ODEs."""
 
     def __init__(self, ic: Tuple[float64], T: float, dt: float) ->  None:
         """
@@ -30,9 +29,51 @@ class Wei:
 
         The solver will create an array in [0, T] og size int(T/dt).
         """
+        try:
+            num_variables = len(ic)
+        except TypeError: 
+            num_variables = 1
         self.t_array = np.linspace(0, T, int(T/dt))
-        self.y_array = np.zeros(shape=(self.t_array.size, 12))
+        self.y_array = np.zeros(shape=(self.t_array.size, num_variables))
         self.y_array[0] = ic
+
+    def _rhs(self, t, y):
+        raise NotImplementedError
+
+    def _step(self, y, t0, t1):
+        dt = t1 - t0
+        k1 = self._rhs(t0, y)
+        k2 = self._rhs(t0 + dt/2, y + k1*dt/2)
+        k3 = self._rhs(t0 + dt/2, y + k2*dt/2)
+        k4 = self._rhs(t0 + dt, y + dt*k3)
+        return y + dt*(k1 + 2*k2 + 2*k3 + k4)/6
+
+    def solve(self):
+        """Solve the ODE."""
+        for i in range(1, self.t_array.size):
+            t0 = self.t_array[i - 1]
+            t1 = self.t_array[i]
+            y = self.y_array[i - 1]
+            self.y_array[i] = self._step(y, t0, t1)
+
+    @property
+    def solution(self):
+        """
+        Return the solution array.
+
+        NB! Will be zeros apart form the initial condition unless `solve` has been called.
+        
+        """
+        return self.y_array
+
+    @property
+    def time(self):
+        """Return the time steps."""
+        return self.t_array
+
+
+class Wei(ODESolver):
+    """RK4 solver of the cell model described by in Wei et. al 2014."""
 
     def _rhs(self, t, y):
         G_K = 25.0         # Voltage gated conductance       [mS/mm^2]
@@ -154,61 +195,23 @@ class Wei:
             dotNClo, dotNCli, dotVoli, dotO
             ])
 
-    def _step(self, y, t0, t1):
-        dt = t1 - t0
-        k1 = self._rhs(t0, y)
-        k2 = self._rhs(t0 + dt/2, y + k1*dt/2)
-        k3 = self._rhs(t0 + dt/2, y + k2*dt/2)
-        k4 = self._rhs(t0 + dt, y + dt*k3)
-        return y + dt*(k1 + 2*k2 + 2*k3 + k4)/6
-
-    def solve(self):
-        """Solve the ODE."""
-        for i in range(1, self.t_array.size):
-            t0 = self.t_array[i - 1]
-            t1 = self.t_array[i]
-            y = self.y_array[i - i]
-            self.y_array[i] = self._step(y, t0, t1)
-
-    @property
-    def solution(self):
-        """
-        Return the solution array.
-
-        NB! Will be zeros apart form the initial condition unless `solve` has been called.
-        
-        """
-        return self.y_array
-
-    @property
-    def time(self):
-        """Return the time steps."""
-        return self.t_array
 
 
 if __name__ == "__main__":
-    # Initialisations
-    v = -74.30      # {mV]
+    def exact(t_array):
+        return np.exp(-t_array)*5
 
-    # Activation and inactivation variables (0, 1)
-    m = 0.0031
-    h = 0.9994
-    n = 0.0107
+    class Test(ODESolver):
+        def _rhs(self, t, y):
+            return -y
 
-    vol = 1.4368e-15    # Initial intracellular volume   [mm^3]
-    beta0 = 7           # Initial intra-/extracellular volume ratio
-    volo = 1/beta0*vol  # Initial extracellular volume
-
-    NKo = 4*volo        # Initial extracellular potassium number
-    NKi = 140*vol       # Initial intracellular potassium number
-    NNao = 144*volo     # Initial extracellular sodium number
-    NNai = 18.0*vol     # Initial intracellular sodium number
-    NClo = 130*volo     # Initial extracellular chloride number
-    NCli = 6*vol       # Initial intracellular chloride number
-
-    O = 29.3            # Initial oxygen concentration  [mg/L]
-    ic = np.array((v, m, h, n, NKo, NKi, NNao, NNai, NClo, NCli, vol, O))
-    Wei_compiled = jitclass(SPEC)(Wei)
-    solver = Wei_compiled(ic, T=2.0, dt=1e-2)
+    solver = Test(5, 1, 1e-1)
     solver.solve()
-    print((solver.solution == 0).any())
+    computed = solver.solution
+    t_array = solver.time
+
+    exact_sol = exact(t_array) 
+
+    print(exact_sol)
+    print(computed)
+    print(np.max(np.abs(computed.flatten() - exact_sol)))
