@@ -4,17 +4,18 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+x, y = np.meshgrid(
+    np.arange(0, 1.1, 0.1),
+    np.arange(0, 1.1, 0.1),
+)
+# u = (y - 0.5)*(1*(x > 0.5) - 1*(x < 0.5))
+# v = (1 - 4*(x - 0.5)**2)*(y > 0.5)
+
+u = (0.5 - y)*(1*(x > 0.5) - 1*(x < 0.5))
+v = -(1 - 4*(x - 0.5)**2)*(y < 0.5)
 
 fig = plt.figure()
 ax = fig.gca()
-
-x, y = np.meshgrid(
-    np.arange(0, 1, 0.1),
-    np.arange(0, 1, 0.1),
-)
-
-u = y
-v = 1 - x
 
 ax.quiver(x, y, u, v)
 plt.show()

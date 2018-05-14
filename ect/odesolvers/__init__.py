@@ -1,5 +1,9 @@
-from .single_weimodel import fenics_ode_solver
+"""Utilities for solving cell model ODEs."""
 
-from .equations import solve
+from single_weimodel import fenics_ode_solver
 
-from .wei_numba_class import Wei, SPEC
+from equations import solve
+
+from wei_numba_class import Wei, SPEC
+
+from numba_baseclass import RK4Solver

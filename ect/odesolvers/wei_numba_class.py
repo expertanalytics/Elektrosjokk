@@ -1,81 +1,15 @@
+"""jit compilable implementaiton of Wei et. al 2014."""
 import math
 
 import numpy as np
 
-from numba import (
-    jitclass,
-    float64,
-)
-
-from typing import Tuple
+from numba_baseclass import RK4Solver
 
 
-SPEC = [
-    ("t_array", float64[:]),
-    ("y_array", float64[:, :])
-]
-
-
-class ODESolver:
-    """RK4 solver for (vector) ODEs."""
-
-    def __init__(self, ic: Tuple[float64], T: float, dt: float) ->  None:
-        """
-        Args:
-            ic: Initial condition of shape 12. The parameters come in the
-                following order: V, m, n,, h, NKo, NKi, NNao, NNai, NClo, NCli, Voli, O.
-            T: End time.
-            dt: Time step.
-
-        The solver will create an array in [0, T] og size int(T/dt).
-        """
-        try:
-            num_variables = len(ic)
-        except TypeError: 
-            num_variables = 1
-        self.t_array = np.linspace(0, T, int(T/dt))
-        self.y_array = np.zeros(shape=(self.t_array.size, num_variables))
-        self.y_array[0] = ic
-
-    def _rhs(self, t, y):
-        raise NotImplementedError
-
-    def _step(self, y, t0, t1):
-        dt = t1 - t0
-        k1 = self._rhs(t0, y)
-        k2 = self._rhs(t0 + dt/2, y + k1*dt/2)
-        k3 = self._rhs(t0 + dt/2, y + k2*dt/2)
-        k4 = self._rhs(t0 + dt, y + dt*k3)
-        return y + dt*(k1 + 2*k2 + 2*k3 + k4)/6
-
-    def solve(self):
-        """Solve the ODE."""
-        for i in range(1, self.t_array.size):
-            t0 = self.t_array[i - 1]
-            t1 = self.t_array[i]
-            y = self.y_array[i - 1]
-            self.y_array[i] = self._step(y, t0, t1)
-
-    @property
-    def solution(self):
-        """
-        Return the solution array.
-
-        NB! Will be zeros apart form the initial condition unless `solve` has been called.
-        
-        """
-        return self.y_array
-
-    @property
-    def time(self):
-        """Return the time steps."""
-        return self.t_array
-
-
-class Wei(ODESolver):
+class Wei(RK4Solver):
     """RK4 solver of the cell model described by in Wei et. al 2014."""
 
-    def _rhs(self, t, y):
+    def _rhs(self, t: float, y) -> np.ndarray:
         G_K = 25.0         # Voltage gated conductance       [mS/mm^2]
         G_Na = 30.0        # Voltage gated conductance       [mS/mm^2]
         g_l_cl = 0.1       # Calcium leak conductance        [mS/mm^2]
@@ -196,22 +130,12 @@ class Wei(ODESolver):
             ])
 
 
-
 if __name__ == "__main__":
-    def exact(t_array):
-        return np.exp(-t_array)*5
+    from numba import jitclass
+    from numba_baseclass import JITSPEC
 
-    class Test(ODESolver):
-        def _rhs(self, t, y):
-            return -y
-
-    solver = Test(5, 1, 1e-1)
+    jit_Solver = jitclass(JITSPEC)(Wei)
+    solver = jit_Solver((0.1,)*12, 0.1, 0.01)   # TODO: proper IC
     solver.solve()
-    computed = solver.solution
-    t_array = solver.time
-
-    exact_sol = exact(t_array) 
-
-    print(exact_sol)
-    print(computed)
-    print(np.max(np.abs(computed.flatten() - exact_sol)))
+    print(solver.solution)
+    print(solver.time)
