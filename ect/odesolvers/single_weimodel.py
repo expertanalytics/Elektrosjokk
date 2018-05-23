@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 def fenics_ode_solver(
         model: CardiacCellModel,
+        time: Constant,
         dt: float,
         interval: Tuple[float],
         ic: Dict[str, float] = None,
@@ -49,15 +50,12 @@ def fenics_ode_solver(
     if ic is None:
         ic = model.initial_conditions()
 
-    t0, _ = interval
-    time = Constant(t0)
+    assert time(0) == interval[0]
 
     solver = SingleCellSolver(model, time, params)
     vs_, vs = solver.solution_fields()
     model.set_initial_conditions(**ic)
     vs_.assign(model.initial_conditions())
-
-
     
     for (t0, t1), solution in solver.solve(interval, dt):
         yield t1, solution.vector().get_local()[:model.num_states() + 1]

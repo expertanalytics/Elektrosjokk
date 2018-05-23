@@ -29,6 +29,6 @@ def read_hdf5_functions(
     v = dolfin.Function(S)
 
     with dolfin.HDF5File(mesh.mpi_comm(), filename, "r") as hdf5file:
-        for name in fields:
+        for i, name in enumerate(fields):
             hdf5file.read(v, name)
             yield v

@@ -2,10 +2,10 @@ import xalbrain as xb
 
 
 def setup_conductivities(mesh):
-    Q = xb.FunctionSpace(mesh, "DG", 0)
+    Q = xb.FunctionSpace(mesh, "CG", 1)
     Mi = xb.Function(Q)
     Me = xb.Function(Q)
 
-    Mi.vector()[:] = 10
-    Me.vector()[:] = 10
+    Mi.vector()[:] = 0.1
+    Me.vector()[:] = 0.3
     return Mi, Me

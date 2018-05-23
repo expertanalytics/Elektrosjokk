@@ -37,20 +37,20 @@ def main(initial_conditions: np.ndarray = None):
     # params = BasicSingleCellSolver.default_parameters()
     params = SingleCellSolver.default_parameters()
 
-    params["scheme"] = "BDF1"
+    params["scheme"] = "RK4"
     # solver = BasicSingleCellSolver(model, time, params)
     solver = SingleCellSolver(model, time, params)
 
     # Assign initial conditions
     vs_, vs = solver.solution_fields()
     # vs_.assign(model.initial_conditions())
-    model.set_initial_conditions(**get_uniform_ic("spike"))
+    model.set_initial_conditions(**get_uniform_ic("flat"))
     vs_.assign(model.initial_conditions())
 
     # Solve and extract values
     # N = 25*(14000 + 3000)
 
-    dt = 5e-4
+    dt = 1e-3
     # T = 1500 
     # N = T/dt + 1
     # assert False, N
@@ -59,7 +59,7 @@ def main(initial_conditions: np.ndarray = None):
     # N = 6000*0.02
     # dt = 0.02
     # interval = (0.0, N)
-    T = 100.0
+    T = 1000.0
     interval = (0.0, T)
 
     start = systime.clock() 
@@ -193,4 +193,3 @@ if __name__ == "__main__":
     # np.save("initial_condition.npy", values[-1])
     # plot_results(times, values, show=False)
     plot_all(times, values)
-
