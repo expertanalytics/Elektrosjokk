@@ -147,6 +147,7 @@ saver.add_field(PointField("NNao-point", field_spec, np.asarray(points)))
 saver.add_field(PointField("NClo-point", field_spec, np.asarray(points)))
 saver.add_field(PointField("Voli-point", field_spec, np.asarray(points)))
 
+print("Entering solver loop")
 theta = ps["theta"]
 for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
     print(f"Solving ({t0}, {t1}) -----> {vs.vector().norm('l2')}")
