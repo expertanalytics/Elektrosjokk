@@ -1,5 +1,3 @@
-"upper_anisotropy""Test case for xalpost."""
-
 import numpy as np
 
 from xalbrain import (
@@ -8,7 +6,7 @@ from xalbrain import (
 )
 
 from dolfin import (
-    UnitSquareMesh,
+    Mesh,
     Constant,
     Expression,
     SubDomain,
@@ -20,6 +18,7 @@ from dolfin import (
     as_matrix,
     as_vector,
     diag,
+    parameters,
 )
 
 from xalbrain.cellmodels import Wei
@@ -38,26 +37,18 @@ from postspec import (
     PostProcessorSpec,
 )
 
-# from xalbrain.parameters import (
-#     SplittingParameters,
-#     BidomainParameters,
-#     SingleCellParameters,
-#     LUParameters
-# )
-
 
 time = Constant(0)
 T = 5e1
 dt = 1e-2
-mesh = UnitSquareMesh(50, 50)
-
+mesh = Mesh("data/merge.xml.gz")
 
 lower_ect_current = Expression(
     "std::abs(sin(2*pi*f*t))*(t < t0) > sin(2*pi*width/2) ? 300 : 0",
     t=time,
     t0=T,
     width=1.0,
-    f=70e-1,        # default: 70e-3
+    f=70e-0,        # default: 70e-3
     degree=1
 )
 
@@ -66,87 +57,50 @@ upper_ect_current = Expression(
     t=time,
     t0=T,
     width=1.0,
-    f=70e-3,
+    f=70e-0,
     degree=1
 )
 
-class UpperBox(SubDomain):
+
+class Front(SubDomain):
     def inside(self, x, on_boundary):
-        return (x[1] > 0.55) and (x[1] < 0.9) and (x[0] > 0.1) and (x[0] < 0.9)
+        sphere = (x[0] - 40.54)**2 + (x[1] - 73.28)**2 + (x[2] - 46.33)**2
+        return sphere < 10.**2
 
 
-class LowerBox(SubDomain):
+class Lateral(SubDomain):
     def inside(self, x, on_boundary):
-        return (x[1] > 0.1) and (x[1] < 0.45) and (x[0] > 0.1) and (x[0] < 0.9)
+        sphere = (x[0] - 77.47)**2 + (x[1] - 13.80)**2 + (x[2] - 11.45)**2
+        return sphere < 10.**2
 
-mf = MeshFunction("size_t", mesh, 2)        # NB! 2 == CellFunction
-mf.set_all(0)
-LowerBox().mark(mf, 1)
-UpperBox().mark(mf, 2)
-
-
-class UpperCorner(SubDomain):
-    def inside(self, x, on_boundary):
-        return x[0] > 0.5 and x[1] > 0.5 and on_boundary
-
-
-class LowerCorner(SubDomain):
-    def inside(self, x, on_boundary):
-        return x[0] < 0.5 and x[1] < 0.5 and on_boundary
-
-
-ff = MeshFunction("size_t", mesh, 1)
+ff = MeshFunction("size_t", mesh, mesh.geometry().dim() - 1)
 ff.set_all(0)
-LowerCorner().mark(ff, 1)
-UpperCorner().mark(ff, 2)
+Front().mark(ff, 1)
+Lateral().mark(ff, 2)
 
-
-class Xdir(Expression):
-    def eval(self, value, x):
-        if x[1] >= 0.5:
-            value[0] = x[1]*x[0]
-            value[1] = 1.0 - x[0]
-        else:
-            value[0] = -x[1]*x[0]
-            value[1] = x[0] - 1
-
-    def value_shape(self):
-        return (2,)
-
-
-class Ydir(Expression):
-    def eval(self, value, x):
-        if x[1] >= 0.5:
-            value[0] = 1.0 - x[0]
-            value[1] = -x[1]*x[0]
-        else:
-            value[0] = -(x[0] - 1)
-            value[1] = x[1]*x[0]
-
-    def value_shape(self):
-        return (2,)
-
+mf = MeshFunction("size_t", mesh, "data/merge_physical_region.xml")
 
 Vv = VectorFunctionSpace(mesh, "CG", 1)
-fiber = project(Xdir(degree=1), Vv)
-transverse = project(Ydir(degree=1), Vv)
+fiber = Function(Vv, "data/anisotropy.xml.gz")
 
 A = as_matrix([
-    [fiber[0], transverse[0]],
-    [fiber[1], transverse[1]]
+    [fiber[0]],
+    [fiber[1]],
+    [fiber[2]]
 ])
 
-upper_intra_anisotropy = A*diag(as_vector([Constant(10), Constant(0.1)]))*A.T
-upper_extra_anisotropy = A*diag(as_vector([Constant(27), Constant(2.7)]))*A.T
-lower_intra_anisotropy = A*diag(as_vector([Constant(10), Constant(0.1)]))*A.T
-lower_extra_anisotropy = A*diag(as_vector([Constant(27), Constant(2.7)]))*A.T
+# Dicvide by 10 in the other direction. No Idea why
+# intra_anisotropy = A*diag(as_vector([Constant(10), Constant(1.0)]))*A.T
+# extra_anisotropy = A*diag(as_vector([Constant(27), Constant(2.7)]))*A.T
+intra_anisotropy = Constant(1)
+extra_anisotropy = Constant(1)
 
 model = Wei()
 brain = CardiacModel(
     mesh,
     time,
-    M_i={2: upper_intra_anisotropy, 1: lower_intra_anisotropy, 0: Constant(0)},
-    M_e={2: upper_extra_anisotropy, 1: lower_extra_anisotropy, 0: Constant(165.4)},
+    M_i={1: intra_anisotropy, 2: Constant(0)},
+    M_e={1: extra_anisotropy, 2: Constant(165.4)},
     cell_models=model,
     ect_current={
         1: Constant(165.4)*lower_ect_current,       # NB! Remeber to include the CSF conductivity
@@ -156,16 +110,13 @@ brain = CardiacModel(
     facet_domains=ff
 )
 
-# splitting_parameters = SplittinParameters(theta=0.5)
-# pde_parameters = BidomainParameters("direct")
-# ode_parameters = SingleCellParameters("RK4")
-# lu_parameters = LUParameters()
-
 ps = SplittingSolver.default_parameters()
 ps["pde_solver"] = "bidomain"
-ps["BidomainSolver"]["linear_solver_type"] = "direct"
+ps["BidomainSolver"]["linear_solver_type"] = "iterative"
 ps["BidomainSolver"]["use_avg_u_constraint"] = True
 ps["theta"] = 0.5
+
+# parameters.form_compiler.quadrature_degree = 1
 
 solver = SplittingSolver(brain, params=ps)
 

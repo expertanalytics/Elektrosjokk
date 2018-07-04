@@ -1,5 +1,3 @@
-"upper_anisotropy""Test case for xalpost."""
-
 import numpy as np
 
 from xalbrain import (
@@ -57,7 +55,7 @@ lower_ect_current = Expression(
     t=time,
     t0=T,
     width=1.0,
-    f=70e-1,        # default: 70e-3
+    f=70e-0,        # default: 70e-3
     degree=1
 )
 
@@ -66,23 +64,17 @@ upper_ect_current = Expression(
     t=time,
     t0=T,
     width=1.0,
-    f=70e-3,
+    f=70e-0,
     degree=1
 )
 
-class UpperBox(SubDomain):
+class Box(SubDomain):
     def inside(self, x, on_boundary):
-        return (x[1] > 0.55) and (x[1] < 0.9) and (x[0] > 0.1) and (x[0] < 0.9)
-
-
-class LowerBox(SubDomain):
-    def inside(self, x, on_boundary):
-        return (x[1] > 0.1) and (x[1] < 0.45) and (x[0] > 0.1) and (x[0] < 0.9)
+        return (x[1] > 0.1) and (x[1] < 0.9) and (x[0] > 0.1) and (x[0] < 0.9)
 
 mf = MeshFunction("size_t", mesh, 2)        # NB! 2 == CellFunction
 mf.set_all(0)
-LowerBox().mark(mf, 1)
-UpperBox().mark(mf, 2)
+Box().mark(mf, 1)
 
 
 class UpperCorner(SubDomain):
@@ -103,12 +95,8 @@ UpperCorner().mark(ff, 2)
 
 class Xdir(Expression):
     def eval(self, value, x):
-        if x[1] >= 0.5:
-            value[0] = x[1]*x[0]
-            value[1] = 1.0 - x[0]
-        else:
-            value[0] = -x[1]*x[0]
-            value[1] = x[0] - 1
+        value[0] = x[1] - 1
+        value[1] = (0.5 - x[0])*x[1]
 
     def value_shape(self):
         return (2,)
@@ -116,12 +104,8 @@ class Xdir(Expression):
 
 class Ydir(Expression):
     def eval(self, value, x):
-        if x[1] >= 0.5:
-            value[0] = 1.0 - x[0]
-            value[1] = -x[1]*x[0]
-        else:
-            value[0] = -(x[0] - 1)
-            value[1] = x[1]*x[0]
+        value[0] = x[1] - 1
+        value[1] = (0.5 - x[0])*x[1]
 
     def value_shape(self):
         return (2,)
@@ -136,17 +120,16 @@ A = as_matrix([
     [fiber[1], transverse[1]]
 ])
 
-upper_intra_anisotropy = A*diag(as_vector([Constant(10), Constant(0.1)]))*A.T
-upper_extra_anisotropy = A*diag(as_vector([Constant(27), Constant(2.7)]))*A.T
-lower_intra_anisotropy = A*diag(as_vector([Constant(10), Constant(0.1)]))*A.T
-lower_extra_anisotropy = A*diag(as_vector([Constant(27), Constant(2.7)]))*A.T
+# Dicvide by 10 in the other direction. No Idea why
+intra_anisotropy = A*diag(as_vector([Constant(10), Constant(1.0)]))*A.T
+extra_anisotropy = A*diag(as_vector([Constant(27), Constant(2.7)]))*A.T
 
 model = Wei()
 brain = CardiacModel(
     mesh,
     time,
-    M_i={2: upper_intra_anisotropy, 1: lower_intra_anisotropy, 0: Constant(0)},
-    M_e={2: upper_extra_anisotropy, 1: lower_extra_anisotropy, 0: Constant(165.4)},
+    M_i={1: intra_anisotropy, 0: Constant(0)},
+    M_e={1: extra_anisotropy, 0: Constant(165.4)},
     cell_models=model,
     ect_current={
         1: Constant(165.4)*lower_ect_current,       # NB! Remeber to include the CSF conductivity

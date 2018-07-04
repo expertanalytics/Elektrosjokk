@@ -6,24 +6,25 @@ mesh = UnitSquareMesh(10, 10)
 
 class Xdir(Expression):
     def eval(self, value, x):
-        if x[1] >= 0.5:
-            value[0] = x[1]*x[0]
-            value[1] = 1.0 - x[0]
-        else:
-            value[0] = -x[1]*x[0]
-            value[1] = x[0] - 1
+        # if x[1] >= 0.5:
+        # value[0] = x[1]*x[0]
+        value[0] = (x[0] - 0.5)*x[1]
+        value[1] = 1.0 - x[1]
+        # else:
+        #     value[0] = -x[1]*x[0]
+        #     value[1] = x[0] - 1
 
     def value_shape(self):
         return (2,)
 
 class Ydir(Expression):
     def eval(self, value, x):
-        if x[1] >= 0.5:
-            value[0] = 1.0 - x[0]
-            value[1] = -x[1]*x[0]
-        else:
-            value[0] = -(x[0] - 1)
-            value[1] = x[1]*x[0]
+        # if x[1] >= 0.5:
+        value[0] = x[1] - 1
+        value[1] = (0.5 - x[0])*x[1]
+        # else:
+        #     value[0] = -(x[0] - 1)
+        #     value[1] = x[1]*x[0]
 
     def value_shape(self):
         return (2,)
@@ -39,7 +40,7 @@ A = as_matrix([
 ])
 
 g1 = Constant(1.0)
-g2 = Constant(2.0)
+g2 = Constant(1.0)
 
 M = diag(as_vector([g1, g2]))
 
