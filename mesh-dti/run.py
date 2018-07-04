@@ -43,21 +43,24 @@ T = 5e1
 dt = 1e-2
 mesh = Mesh("data/merge.xml.gz")
 
+amplitude = 0       # TODO: No current
 lower_ect_current = Expression(
-    "std::abs(sin(2*pi*f*t))*(t < t0) > sin(2*pi*width/2) ? 300 : 0",
+    "std::abs(sin(2*pi*f*t))*(t < t0) > sin(2*pi*width/2) ? A : 0",
     t=time,
     t0=T,
     width=1.0,
     f=70e-0,        # default: 70e-3
+    A=amplitude,
     degree=1
 )
 
 upper_ect_current = Expression(
-    "std::abs(sin(2*pi*f*t))*(t < t0) > sin(2*pi*width/2) ? -300 : 0",
+    "std::abs(sin(2*pi*f*t))*(t < t0) > sin(2*pi*width/2) ? -A : 0",
     t=time,
     t0=T,
     width=1.0,
     f=70e-0,
+    A=amplitude,
     degree=1
 )
 
@@ -92,19 +95,24 @@ A = as_matrix([
 # Dicvide by 10 in the other direction. No Idea why
 # intra_anisotropy = A*diag(as_vector([Constant(10), Constant(1.0)]))*A.T
 # extra_anisotropy = A*diag(as_vector([Constant(27), Constant(2.7)]))*A.T
-intra_anisotropy = Constant(1)
-extra_anisotropy = Constant(1)
+intra_anisotropy = Constant(0.01)
+extra_anisotropy = Constant(0.01)
+# intra_anisotropy = Constant(1)
+# extra_anisotropy = Constant(1)
 
 model = Wei()
 brain = CardiacModel(
     mesh,
     time,
     M_i={1: intra_anisotropy, 2: Constant(0)},
-    M_e={1: extra_anisotropy, 2: Constant(165.4)},
+    M_e={1: extra_anisotropy, 2: Constant(1.654)},
+    # M_e={1: extra_anisotropy, 2: Constant(165.4)},
     cell_models=model,
     ect_current={
-        1: Constant(165.4)*lower_ect_current,       # NB! Remeber to include the CSF conductivity
-        2: Constant(165.4)*upper_ect_current
+        1: Constant(1.654)*lower_ect_current,       # NB! Remeber to include the CSF conductivity
+        2: Constant(1.654)*upper_ect_current
+        # 1: Constant(165.4)*lower_ect_current,       # NB! Remeber to include the CSF conductivity
+        # 2: Constant(165.4)*upper_ect_current
     },
     cell_domains=mf,
     facet_domains=ff
