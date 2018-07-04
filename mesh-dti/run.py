@@ -78,7 +78,7 @@ ff.set_all(0)
 Front().mark(ff, 1)
 Lateral().mark(ff, 2)
 
-mf = MeshFunction("size_t", mesh, "data/merge_physical_region.xml")
+mf = MeshFunction("size_t", mesh, "data/merge_physical_region.xml.gz")
 
 Vv = VectorFunctionSpace(mesh, "CG", 1)
 fiber = Function(Vv, "data/anisotropy.xml.gz")
