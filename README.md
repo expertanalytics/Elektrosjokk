@@ -1,2 +1,3 @@
 # Elektrosjokk
-Elektrosjokk mot depresjoner -- En samling av diverse scripts
+
+En samling av elektrosjokksimuleringer og relaterte programmer

@@ -2,8 +2,8 @@ from dolfin import *
 from conductivites import get_conductivities
 from shock import get_shock 
 
-# mesh = Mesh("erika_res32.xml")
-mesh = UnitCubeMesh(20, 20, 20) 
+mesh = Mesh("erika_res32.xml")
+# mesh = UnitCubeMesh(20, 20, 20) 
 #E1 = FiniteElement("Lagrange", mesh.ufl_cell(),  1) # make scalar finite element
 #E12 = E1*E1                                         # make two elements, one for each unknown 
 #W = FunctionSpace(mesh, E12)                        # make finite element space  
@@ -31,7 +31,7 @@ zero_function = project(Constant(0), V)
 dt = 0.01
 T = 1.0
 t = 0.0 
-alpha = Constant(10)
+alpha = Constant(1)     # 10
 
 dtc = Constant(dt)
 

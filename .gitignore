@@ -110,7 +110,6 @@ tmp.*
 /Results
 
 .mypy_cache/
-data/
 *.dat
 *.pdf
 
@@ -121,3 +120,5 @@ figures/
 *.pkl
 
 *.png
+*.mgz
+*casedir/

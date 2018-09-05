@@ -1,4 +1,3 @@
-
 from fenics import *
 
 class shock2D(Expression): 
@@ -27,8 +26,9 @@ class shock3D(Expression):
 
 
 def get_shock(t=0): 
-  # S = shock3D(t) 
-#  S = Expression("exp(-100*pow(x[0]-34.6, 2))*exp(-100*pow(x[1]-0.28, 2))*exp(-100*pow(x[2]-87.0, 2))*exp(-t)", t=t) 
-  # S = Expression("x[0]-34.6") 
-  S = Expression("exp(-0.003*pow(x[0]-34.6, 2))*exp(-0.003*pow(x[1]-0.28, 2))*exp(-0.003*pow(x[2]-87.0, 2))*exp(-t)", t=t, degree=1) 
+  S = Expression(
+      # "700*exp(-0.003*pow(x[0]-34.6, 2))*exp(-0.003*pow(x[1]-0.28, 2))*exp(-0.003*pow(x[2]-87.0, 2))*exp(-t)",
+      "700*exp(-0.003*pow(x[0]-10, 2))*exp(-0.003*pow(x[1]-68, 2))*exp(-0.003*pow(x[2]-32.0, 2))*exp(-t)",
+      t=t,
+      degree=1)
   return S  
