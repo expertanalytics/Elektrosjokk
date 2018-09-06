@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 from scipy.interpolate import interp1d
 
@@ -25,12 +26,16 @@ from postspec import (
     PostProcessorSpec,
 )
 
+from pathlib import Path
+
+DATAPATH = Path.home() / "Documents/ECT-data"
+
 df.set_log_level(100)
 
 time = df.Constant(0)
 dt = 1e-2
 T = 50.0      # End time in [ms]
-mesh = df.Mesh("data/merge.xml.gz")
+mesh = df.Mesh(str(DATAPATH / "meshes/bergenh18/merge.xml.gz"))
 
 # Boundary condition facet function
 ff = df.MeshFunction("size_t", mesh, mesh.geometry().dim() - 1)
@@ -42,7 +47,7 @@ mf = df.MeshFunction("size_t", mesh, "data/wm.xml.gz")
 
 # Load the anisotropy
 Vv = df.TensorFunctionSpace(mesh, "CG", 1)
-fiber = df.Function(Vv, "data/anisotropy_correct.xml.gz")
+fiber = df.Function(Vv, str(DATAPATH / "meshes/bergenh18/anisotropy_correct.xml.gz"))
 
 
 def get_anisotropy(fiber, iso_value):
@@ -58,7 +63,8 @@ def compute_point_weight(x, points_array):
 
 # Load the EEG data
 start_idx = 1663389
-time_series = np.load("data/EEG_signals.npy")[:, start_idx:]
+time_series = pd.read_pickle(DATAPATH / "zhi/EEG_signal.xz").values[:, start_idx:]
+# time_series = np.load("data/EEG_signals.npy")[:, start_idx:]
 
 # Sample rate in 5kHz -- >  now in ms
 time_array = np.linspace(0, time_series.shape[1]/5, time_series.shape[1])
@@ -77,8 +83,6 @@ class MyExpression(df.Expression):
             **kwargs
     ):
         """Linear interpolation of each time series."""
-        print(np.max(time_series_list[0]))
-        print(np.min(time_series_list[0]))
         self.time_func_list = [
             interp1d(time_axis, ts) for ts in time_series_list
         ]
@@ -92,16 +96,11 @@ class MyExpression(df.Expression):
                 compute_point_weight(x, sample_points),
                 self.time_func_list,
         )])
-
-        import IPython
-        IPython.embed()
-        assert False
         # The EEG signals are in muV
         value[0] = val*1e-3     # mV
 
     def value_type(self):
         return (1,)
-
 
 
 my_expr = MyExpression(
@@ -143,11 +142,8 @@ ps["BidomainSolver"]["Cm"] = 1e1         # mF/mm^2 -- Wei
 solver = SplittingSolver(brain, params=ps)
 
 vs_, *_ = solver.solution_fields()
-REFERENCE_SOLUTION = np.load("REFERENCE_SOLUTION.npy")
+REFERENCE_SOLUTION = pd.read_pickle(DATAPATH / "initial_conditions/REFERENCE_SOLUTION.xz").values
 uniform_ic = wei_uniform_ic(data=REFERENCE_SOLUTION, state="flat")
-
-print(uniform_ic)
-1/0
 
 brain.cell_models().set_initial_conditions(**uniform_ic)
 vs_.assign(model.initial_conditions())

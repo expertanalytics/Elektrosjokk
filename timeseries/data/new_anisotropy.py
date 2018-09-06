@@ -55,8 +55,8 @@ class WM(df.SubDomain):
 
 
 if __name__ == "__main__":
-    mesh = df.Mesh("../merge.xml.gz")
-    wm_img = nib.load("../wm.seg.mgz")
+    mesh = df.Mesh("merge.xml.gz")
+    wm_img = nib.load("wm.seg.mgz")
     wm_vox2ras = wm_img.header.get_vox2ras_tkr()
     wm_ras2vox = np.linalg.inv(wm_vox2ras)
 
@@ -75,8 +75,8 @@ if __name__ == "__main__":
     func_space = df.TensorFunctionSpace(mesh, "CG", 1)
     anisotropy = Anisotropy(mesh, dti_img.get_data(), dti_inv_aff, wm_img.get_data(), wm_ras2vox, degree=1)
     anisotropy_func = df.interpolate(anisotropy, func_space)
-    df.File("anisotropy_new.pvd") << anisotropy_func
-    df.File("anisotropy_correct.xml.gz") << anisotropy_func
+    df.File("anisotropy.pvd") << anisotropy_func
+    df.File("anisotropy.xml.gz") << anisotropy_func
 
     # my_point = np.array([[1, 1, 1], [2, 2, 2]])
 
