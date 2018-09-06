@@ -120,5 +120,4 @@ figures/
 *.pkl
 
 *.png
-*.mgz
 *casedir/

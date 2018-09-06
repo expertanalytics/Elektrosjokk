@@ -1,0 +1,5 @@
+mri_watershed -useSRAS -surf surf/outer mri/orig_nu.mgz trash/trash.mgz
+
+De er binary surface files og kan åpnes i freeview . ( freeview -f flate)
+
+Du kan skrive den over til .stl  format med mris_convert surface ./surface.stl. (nytt i Freesurfer v6.0) 
