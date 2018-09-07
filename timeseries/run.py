@@ -90,15 +90,14 @@ if rank == 0:
             )
         ]
 
-    print("Only using 2 channels")
-    channel_points = channel_points[:2]
+    print("Only using 10 channels")
+    channel_points = channel_points[:10]
     # Sample rate in 5kHz -- >  now in ms
     time_array = np.linspace(0, time_series.shape[1]/5, time_series.shape[1])
     interpolated_list = [
         interp1d(time_array, ts) for ts in time_series[:len(channel_points), :]
     ]
 else:
-    channel_points = None
     interpolated_list = None
     channel_points = None
 
