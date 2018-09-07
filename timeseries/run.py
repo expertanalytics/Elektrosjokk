@@ -90,16 +90,20 @@ if rank == 0:
             )
         ]
 
+    print("Only using 2 channels")
+    channel_points = channel_points[:2]
     # Sample rate in 5kHz -- >  now in ms
     time_array = np.linspace(0, time_series.shape[1]/5, time_series.shape[1])
     interpolated_list = [
         interp1d(time_array, ts) for ts in time_series[:len(channel_points), :]
     ]
 else:
+    channel_points = None
     interpolated_list = None
 
 # Broadcast the interpolation
 interpolated_list = comm.bcast(interpolated_list, root=0)
+channel_points = comm.bcast(channel_points, root=0)
 
 
 class MyExpression(df.Expression):
@@ -144,11 +148,11 @@ model = Wei()
 brain = CardiacModel(
     mesh,
     time,
-    # unsure about the units
-    M_i={0: get_anisotropy(fiber, 0.1e3), 11: get_anisotropy(fiber, 0.1e3)
+    # Units now in mS/mm
+    M_i={0: get_anisotropy(fiber, 0.1), 11: get_anisotropy(fiber, 0.1)
     },
     M_e={
-        0: get_anisotropy(fiber, 0.276e3), 11: get_anisotropy(fiber, 0.126e3)
+        0: get_anisotropy(fiber, 0.276), 11: get_anisotropy(fiber, 0.126)
     },
     cell_models=model,
     facet_domains=ff,
@@ -163,8 +167,8 @@ ps["BidomainSolver"]["linear_solver_type"] = "iterative"
 ps["BidomainSolver"]["use_avg_u_constraint"] = False
 
 # Still unsure about units
-ps["BidomainSolver"]["Chi"] = 1.6e2     # 1/mm -- Dougherty 2015
-ps["BidomainSolver"]["Cm"] = 1e1         # mF/mm^2 -- Wei
+ps["BidomainSolver"]["Chi"] = 1.26e2     # 1/mm -- Dougherty 2015
+ps["BidomainSolver"]["Cm"] = 1e-10         # F/mm^2 -- Dougherty 2015
 
 # parameters.form_compiler.quadrature_degree = 1
 solver = SplittingSolver(brain, params=ps)
