@@ -28,7 +28,10 @@ from postspec import (
 
 from pathlib import Path
 
-DATAPATH = Path.home() / "Documents/ECT-data"
+import warnings
+warnings.simplefilter("ignore", DeprecationWarning)
+
+DATAPATH = Path.home() / "shared/ECT-data"
 
 df.set_log_level(100)
 
@@ -43,7 +46,7 @@ ff.set_all(0)
 df.CompiledSubDomain("x[0] < 5 && on_boundary").mark(ff, 11)
 
 # White matter cell function
-mf = df.MeshFunction("size_t", mesh, "data/wm.xml.gz")
+mf = df.MeshFunction("size_t", mesh, str(DATAPATH / "meshes/bergenh18/wm.xml.gz"))
 
 # Load the anisotropy
 Vv = df.TensorFunctionSpace(mesh, "CG", 1)
@@ -148,18 +151,15 @@ uniform_ic = wei_uniform_ic(data=REFERENCE_SOLUTION, state="flat")
 brain.cell_models().set_initial_conditions(**uniform_ic)
 vs_.assign(model.initial_conditions())
 
-field_spec = FieldSpec()
-pp_spec = PostProcessorSpec(casedir="test_pp_casedir")
+field_spec = FieldSpec(save_as="xdmf", stride_timestep=10)
+
+outpath =  Path.home() / "out/bergen_casedir"
+pp_spec = PostProcessorSpec(casedir=outpath)
 
 saver = Saver(pp_spec)
 saver.store_mesh(mesh, facet_domains=ff)
 saver.add_field(Field("v", field_spec))
 saver.add_field(Field("u", field_spec))
-points = [(1.18, -6.79, 19.72)]
-saver.add_field(PointField("NKo-point", field_spec, np.asarray(points)))
-saver.add_field(PointField("NNao-point", field_spec, np.asarray(points)))
-saver.add_field(PointField("NClo-point", field_spec, np.asarray(points)))
-saver.add_field(PointField("Voli-point", field_spec, np.asarray(points)))
 
 theta = ps["theta"]
 for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
@@ -174,11 +174,7 @@ for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
         i,
         {
             "v": v,
-            "u": u,
-            "NKo-point": sol[4],
-            "NNao-point": sol[6],
-            "NClo-point": sol[8],
-            "Voli-point": sol[10]
+            "u": u
         }
     )
 saver.close()
