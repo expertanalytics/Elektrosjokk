@@ -37,7 +37,7 @@ rank = comm.Get_rank()
 
 warnings.simplefilter("ignore", DeprecationWarning)
 
-BASEDIR = "Documents"
+BASEDIR = "shared"
 DATAPATH = Path.home() / BASEDIR / "ECT-data"
 
 df.set_log_level(100)
@@ -100,6 +100,7 @@ if rank == 0:
 else:
     channel_points = None
     interpolated_list = None
+    channel_points = None
 
 # Broadcast the interpolation
 interpolated_list = comm.bcast(interpolated_list, root=0)
