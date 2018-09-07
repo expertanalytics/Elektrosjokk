@@ -10,6 +10,8 @@ from xalbrain import (
 
 import dolfin as df
 
+from mpi4py import MPI
+
 from xalbrain.cellmodels import Wei
 
 from postutils import wei_uniform_ic
@@ -29,6 +31,10 @@ from postspec import (
 from pathlib import Path
 
 import warnings
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+
 warnings.simplefilter("ignore", DeprecationWarning)
 
 BASEDIR = "Documents"
@@ -51,7 +57,7 @@ mf = df.MeshFunction("size_t", mesh, str(DATAPATH / "meshes/bergenh18/wm.xml.gz"
 
 # Load the anisotropy
 Vv = df.TensorFunctionSpace(mesh, "CG", 1)
-fiber = df.Function(Vv, str(DATAPATH / "meshes/bergenh18/anisotropy_correct.xml.gz"))
+fiber = df.Function(Vv, str(DATAPATH / "meshes/bergenh18/anisotropy.xml.gz"))
 
 
 def get_anisotropy(fiber, iso_value):
@@ -60,30 +66,40 @@ def get_anisotropy(fiber, iso_value):
 
 def compute_point_weight(x, points_array):
     """Compute the normalised square distance between `x` and each point in `point_list`."""
-    square_dist_matrix = np.sqrt(np.power(x - points_array, 2).sum(axis=-1))
+    # square_dist_matrix = np.sqrt(np.power(x - points_array, 2).sum(axis=-1))
+    # Use distance squared, not distance
+    square_dist_matrix = np.power(x - points_array, 2).sum(axis=-1)
     scaled_point_weight = square_dist_matrix/square_dist_matrix.sum()
     return scaled_point_weight
 
 
-# Load the EEG data
-start_idx = 1663389
-time_series = pd.read_pickle(DATAPATH / "zhi/EEG_signal.xz").values[:, start_idx:]
-# time_series = np.load("data/EEG_signals.npy")[:, start_idx:]
+if rank == 0:
+    # Load the EEG data
+    start_idx = 1663389
+    stop_idx = start_idx + 300000
+    time_series = pd.read_pickle(DATAPATH / "zhi/EEG_signal.xz").values[:, start_idx:stop_idx]
 
-# Sample rate in 5kHz -- >  now in ms
-time_array = np.linspace(0, time_series.shape[1]/5, time_series.shape[1])
+    with open(DATAPATH / "zhi/channel.pos", "r") as channel_pos_handle:
+        channel_points = [
+            np.fromiter(
+                map(lambda x: 10*float(x), ch[2:]),  # Cast each coordinate to float and convert to mm
+                dtype=np.float64
+            ) for ch in map(                         # Split all lines in ','
+                lambda x: x.split(","),
+                channel_pos_handle.readlines()
+            )
+        ]
 
-
-with open(DATAPATH / "zhi/channel.pos", "r") as channel_pos_handle:
-    channel_points = [
-        np.fromiter(
-            map(lambda x: 10*float(x), ch[2:]),  # Cast each coordinate to float and convert to mm
-            dtype=np.float64
-        ) for ch in map(                         # Split all lines in ','
-            lambda x: x.split(","),
-            channel_pos_handle.readlines()
-        )
+    # Sample rate in 5kHz -- >  now in ms
+    time_array = np.linspace(0, time_series.shape[1]/5, time_series.shape[1])
+    interpolated_list = [
+        interp1d(time_array, ts) for ts in time_series[:len(channel_points), :]
     ]
+else:
+    interpolated_list = None
+
+# Broadcast the interpolation
+interpolated_list = comm.bcast(interpolated_list, root=0)
 
 
 class MyExpression(df.Expression):
@@ -91,16 +107,13 @@ class MyExpression(df.Expression):
 
     def __init__(
             self,
-            time_axis,
-            time_series_list,
             time,
             point_list,
+            interpolated_list,
             **kwargs
     ):
         """Linear interpolation of each time series."""
-        self.time_func_list = [
-            interp1d(time_axis, ts) for ts in time_series_list
-        ]
+        self.time_func_list = interpolated_list
         self.time = time                # The current time
         self.point_list = point_list    # The point corresponding to each time series
 
@@ -121,10 +134,9 @@ class MyExpression(df.Expression):
 
 
 my_expr = MyExpression(
-    time_array,
-    time_series[:len(channel_points), :],
     time,
     channel_points,
+    interpolated_list,
     degree=1
 )
 
