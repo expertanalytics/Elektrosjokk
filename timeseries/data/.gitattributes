@@ -1,4 +1,0 @@
-merge.xml.gz filter=lfs diff=lfs merge=lfs -text
-wm.xml.gz filter=lfs diff=lfs merge=lfs -text
-anisotropy_correct.xml.gz filter=lfs diff=lfs merge=lfs -text
-test.mgz filter=lfs diff=lfs merge=lfs -text

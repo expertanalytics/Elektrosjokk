@@ -28,6 +28,10 @@ from postspec import (
 
 from pathlib import Path
 
+import warnings
+warnings.simplefilter("ignore", DeprecationWarning)
+
+# Get filepath to data
 DATAPATH = Path.home() / "Documents/ECT-data"
 
 df.set_log_level(100)
@@ -40,7 +44,7 @@ mesh = df.Mesh(str(DATAPATH / "meshes/bergenh18/merge.xml.gz"))
 # Boundary condition facet function
 ff = df.MeshFunction("size_t", mesh, mesh.geometry().dim() - 1)
 ff.set_all(0)
-df.CompiledSubDomain("x[0] < 5 && on_boundary").mark(ff, 11)
+df.CompiledSubDomain("x[2] > 20 && on_boundary").mark(ff, 11)
 
 # White matter cell function
 mf = df.MeshFunction("size_t", mesh, "data/wm.xml.gz")
@@ -68,7 +72,18 @@ time_series = pd.read_pickle(DATAPATH / "zhi/EEG_signal.xz").values[:, start_idx
 
 # Sample rate in 5kHz -- >  now in ms
 time_array = np.linspace(0, time_series.shape[1]/5, time_series.shape[1])
-sample_points = np.array([(56, -43, 25)])   # Found by clicking randomly in Paraview
+
+
+with open(DATAPATH / "zhi/channel.pos", "r") as channel_pos_handle:
+    channel_points = [
+        np.fromiter(
+            map(lambda x: 10*float(x), ch[2:]),  # Cast each coordinate to float and convert to mm
+            dtype=np.float64
+        ) for ch in map(                         # Split all lines in ','
+            lambda x: x.split(","),
+            channel_pos_handle.readlines()
+        )
+    ]
 
 
 class MyExpression(df.Expression):
@@ -92,12 +107,14 @@ class MyExpression(df.Expression):
     def eval(self, value, x):
         """Scale the value of the time series with a normalised weight."""
 
-        val = sum([factor*tf(self.time(0)) for factor, tf in zip(
-                compute_point_weight(x, sample_points),
+        val = sum([
+            factor*tf(self.time(0)) for factor, tf in zip(
+                compute_point_weight(x, self.point_list),
                 self.time_func_list,
-        )])
+            )
+        ])
         # The EEG signals are in muV
-        value[0] = val*1e-3     # mV
+        value[0] = val*1e-3     # Convert to mV
 
     def value_type(self):
         return (1,)
@@ -105,12 +122,11 @@ class MyExpression(df.Expression):
 
 my_expr = MyExpression(
     time_array,
-    time_series[:len(sample_points), :],
+    time_series[:len(channel_points), :],
     time,
-    sample_points,
+    channel_points,
     degree=1
 )
-# my_expr = df.Constant(1)
 
 model = Wei()
 brain = CardiacModel(

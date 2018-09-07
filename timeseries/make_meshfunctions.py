@@ -2,6 +2,8 @@ import numpy as np
 import nibabel as nib
 import dolfin as df
 
+from pathlib import Path
+
 
 def is_white_matter(wm_seg, wm_ras2vox, query_point):
     """Convert from RAS to voxel coordinates and check segmemtation if white or not."""
@@ -55,8 +57,11 @@ class WM(df.SubDomain):
 
 
 if __name__ == "__main__":
-    mesh = df.Mesh("merge.xml.gz")
-    wm_img = nib.load("wm.seg.mgz")
+    DATAPATH = Path.home() / "Documents/ECT-data"
+
+
+    mesh = df.Mesh(str(DATAPATH /  "meshes/bergenh18/merge.xml.gz"))
+    wm_img = nib.load(str(DATAPATH / "zhi/wm.seg.mgz"))
     wm_vox2ras = wm_img.header.get_vox2ras_tkr()
     wm_ras2vox = np.linalg.inv(wm_vox2ras)
 
@@ -67,19 +72,20 @@ if __name__ == "__main__":
     wm.wm_ras2vox = wm_ras2vox
     wm.mark(mf, 11)
 
-    df.File("wm.xml.gz") << mf
+    df.File(str(DATAPATH / "meshes/bergenh18/wm.xml.gz")) << mf
 
-    dti_img = nib.load("test.mgz")
+    dti_img = nib.load(str(DATAPATH / "zhi/test.mgz"))
     dti_inv_aff = np.linalg.inv(dti_img.get_header().get_vox2ras_tkr())     # ras->vox
 
     func_space = df.TensorFunctionSpace(mesh, "CG", 1)
     anisotropy = Anisotropy(mesh, dti_img.get_data(), dti_inv_aff, wm_img.get_data(), wm_ras2vox, degree=1)
     anisotropy_func = df.interpolate(anisotropy, func_space)
     df.File("anisotropy.pvd") << anisotropy_func
-    df.File("anisotropy.xml.gz") << anisotropy_func
+    df.File(str(DATAPATH / "meshes/bergenh18/anisotropy.xml.gz")) << anisotropy_func
+
+
 
     # my_point = np.array([[1, 1, 1], [2, 2, 2]])
-
     # img = nib.load("test.mgz")
     # inv_aff = np.linalg.inv(img.get_header().get_vox2ras_tkr())     # ras->vox
 
