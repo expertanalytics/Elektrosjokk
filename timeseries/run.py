@@ -54,9 +54,11 @@ DATAPATH = Path.home() / BASEDIR / "ECT-data"
 df.set_log_level(100)
 
 time_const = df.Constant(0)
-dt = 1e-2
+# dt = 1e-2
+dt = 1e-1
 T = 50.0      # End time in [ms]
 mesh = df.Mesh(str(DATAPATH / "meshes/bergenh18/merge.xml.gz"))
+mesh.coordinates()[:] *= 10     # convert from mm to cm
 
 # Boundary condition facet function
 ff = df.MeshFunction("size_t", mesh, mesh.geometry().dim() - 1)
@@ -71,8 +73,11 @@ Vv = df.TensorFunctionSpace(mesh, "CG", 1)
 fiber = df.Function(Vv, str(DATAPATH / "meshes/bergenh18/anisotropy.xml.gz"))
 
 
-def get_anisotropy(fiber, iso_value):
-    return fiber*df.diag(df.as_vector([iso_value]*3))*fiber.T
+def get_anisotropy(fiber, iso_value, k=1):
+    """Following Lee-2012 p6.""" 
+    ql = iso_value*k**(2./3)
+    qt = iso_value*k**(-1./3)
+    return fiber*df.diag(df.as_vector([ql, qt, qt]))*fiber.T
 
 
 @nb.jit(nb.float64[:](nb.float64[:], nb.float64[:, :]), **nbkwargs)
@@ -117,7 +122,8 @@ if rank == 0:
     with open(DATAPATH / "zhi/channel.pos", "r") as channel_pos_handle:
         channel_points = [
             np.fromiter(
-                map(lambda x: 10*float(x), ch[2:]),  # Cast each coordinate to float and convert to mm
+                # NB! coordinates in cm
+                map(lambda x: float(x), ch[2:]),  # Cast each coordinate to float
                 dtype=np.float64
             ) for ch in map(                         # Split all lines in ','
                 lambda x: x.split(","),
@@ -126,14 +132,15 @@ if rank == 0:
         ]
 
     N = 100
-    print(f"Only using {N} channels")
+    print("Only using {} channels".format(N))
     channel_points = np.array(channel_points[:N]).astype(np.float_)
     # Sample rate in 5kHz -- >  now in ms
     time_array = np.linspace(0, time_series.shape[1]/5, time_series.shape[1])
     time_series = time_series[:len(channel_points), :]
 else:
+    time_series = None
     channel_points = None
-    interpolated_list = None
+    time_array = None
 
 # Broadcast the arrays. Only do file IO on one process
 channel_points = comm.bcast(channel_points, root=0)
@@ -187,10 +194,10 @@ brain = CardiacModel(
     mesh,
     time_const,
     # Units now in mS/mm
-    M_i={0: get_anisotropy(fiber, 0.1), 11: get_anisotropy(fiber, 0.1)
+    M_i={0: get_anisotropy(fiber, 1.0), 11: get_anisotropy(fiber, 1.0)        # mS/cm
     },
     M_e={
-        0: get_anisotropy(fiber, 0.276), 11: get_anisotropy(fiber, 0.126)
+        0: get_anisotropy(fiber, 2.76), 11: get_anisotropy(fiber, 1.26)     # mS/cm
     },
     cell_models=model,
     facet_domains=ff,
@@ -205,15 +212,20 @@ ps["BidomainSolver"]["linear_solver_type"] = "iterative"
 ps["BidomainSolver"]["use_avg_u_constraint"] = False
 
 # Still unsure about units
-ps["BidomainSolver"]["Chi"] = 1.26e2     # 1/mm -- Dougherty 2015
-ps["BidomainSolver"]["Cm"] = 1e-10         # F/mm^2 -- Dougherty 2015
+ps["BidomainSolver"]["Chi"] = 1.26e3      # 1/cm -- Dougherty 2015
+ps["BidomainSolver"]["Cm"] = 1.0          # muF/cm^2 -- Dougherty 2015
+
+df.parameters["form_compiler"]["representation"] = "uflacs"
+df.parameters["form_compiler"]["cpp_optimize"] = True
+flags = "-O3 -ffast-math -march=native"
+df.parameters["form_compiler"]["cpp_optimize_flags"] = flags
 
 # parameters.form_compiler.quadrature_degree = 1
 solver = SplittingSolver(brain, params=ps)
 
 vs_, *_ = solver.solution_fields()
 REFERENCE_SOLUTION = pd.read_pickle(DATAPATH / "initial_conditions/REFERENCE_SOLUTION.xz").values
-uniform_ic = wei_uniform_ic(data=REFERENCE_SOLUTION, state="flat")
+uniform_ic = wei_uniform_ic(data=REFERENCE_SOLUTION, state="fire")      # flat
 
 brain.cell_models().set_initial_conditions(**uniform_ic)
 vs_.assign(model.initial_conditions())
@@ -228,15 +240,30 @@ saver.store_mesh(mesh, facet_domains=ff)
 saver.add_field(Field("v", field_spec))
 saver.add_field(Field("u", field_spec))
 
+
+point_array = np.array([
+    [-46.56, -3.64,-17.89],
+    [34.84, -3.64, 32.11],
+    [1.18, -32.84, 1.59],
+    [1.18, 67.28, 2.79]
+])
+ode_names = ("V", "m","h", "n", "NKo", "NKi", "NNao", "NNai", "NClo", "NCli", "vol", "O")
+for name in ode_names:
+    saver.add_field(PointField(name, field_spec, point_array))
+
 theta = ps["theta"]
 
 tick = time.clock()
 for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
-    print(f"Solving ({t0}, {t1}) -----> {vs.vector().norm('l2')}")
+    norm = vs.vector().norm('l2')
+    print("Solving ({t0}, {t1}) -----> {norm}".format(t0=t0, t1=t1, norm=norm))
+    print()
     current_t = t0 + theta*(t1 - t0)
     v, u, *_ = vur.split(deepcopy=True)
     sol = vs.split(deepcopy=True)
-    print()
+
+    update_dict = {"v": v, "u": u}
+    update_dict.update({name: func for name, func in zip(ode_names, sol)})
 
     saver.update(
         time_const,
@@ -247,4 +274,4 @@ for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
         }
     )
 saver.close()
-print(f"Time: {time.clock() - tick}")
+# print(f"Time: {time.clock() - tick}")

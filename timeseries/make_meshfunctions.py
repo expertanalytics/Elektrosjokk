@@ -39,6 +39,9 @@ class Anisotropy(df.Expression):
             diff_tensor = np.eye(3).flatten()
         else:
             i, j, k = np.rint(nib.affines.apply_affine(self.affine, x).T).astype(np.int64)
+
+            from IPython import embed
+            embed()
             diff_tensor = self.dti_data[i, j, k]
             diff_tensor /= np.repeat(
                 np.linalg.norm(diff_tensor.reshape(3, 3), axis=1),
@@ -65,14 +68,14 @@ if __name__ == "__main__":
     wm_vox2ras = wm_img.header.get_vox2ras_tkr()
     wm_ras2vox = np.linalg.inv(wm_vox2ras)
 
-    mf = df.MeshFunction("size_t", mesh, mesh.geometry().dim())
-    mf.set_all(0)
-    wm = WM()
-    wm.wm_seg = wm_img.get_data()
-    wm.wm_ras2vox = wm_ras2vox
-    wm.mark(mf, 11)
+    # mf = df.MeshFunction("size_t", mesh, mesh.geometry().dim())
+    # mf.set_all(0)
+    # wm = WM()
+    # wm.wm_seg = wm_img.get_data()
+    # wm.wm_ras2vox = wm_ras2vox
+    # wm.mark(mf, 11)
 
-    df.File(str(DATAPATH / "meshes/bergenh18/wm.xml.gz")) << mf
+    # df.File(str(DATAPATH / "meshes/bergenh18/wm.xml.gz")) << mf
 
     dti_img = nib.load(str(DATAPATH / "zhi/test.mgz"))
     dti_inv_aff = np.linalg.inv(dti_img.get_header().get_vox2ras_tkr())     # ras->vox
