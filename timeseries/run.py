@@ -8,8 +8,7 @@ from xalbrain import (
     CardiacModel,
 )
 
-import dolfin as df
-
+import dolfin as df 
 from mpi4py import MPI
 
 from xalbrain.cellmodels import Wei
@@ -48,8 +47,9 @@ nbkwargs = {
 
 warnings.simplefilter("ignore", DeprecationWarning)
 
-BASEDIR = "Documents"
+BASEDIR = "data"
 DATAPATH = Path.home() / BASEDIR / "ECT-data"
+#DATAPATH = Path("ECT-data")
 
 df.set_log_level(100)
 
@@ -117,9 +117,10 @@ if rank == 0:
     # Load the EEG data
     start_idx = 1663389
     stop_idx = start_idx + 300000
-    time_series = pd.read_pickle(DATAPATH / "zhi/EEG_signal.xz").values[:, start_idx:stop_idx]
+    #time_series = pd.read_pickle(DATAPATH / "zhi/EEG_signal.xz").values[:, start_idx:stop_idx]
+    time_series = np.load(str(DATAPATH / "zhi/SHORT_EEG_signal.npy"))
 
-    with open(DATAPATH / "zhi/channel.pos", "r") as channel_pos_handle:
+    with open(str(DATAPATH / "zhi/channel.pos"), "r") as channel_pos_handle:
         channel_points = [
             np.fromiter(
                 # NB! coordinates in cm
@@ -224,7 +225,8 @@ df.parameters["form_compiler"]["cpp_optimize_flags"] = flags
 solver = SplittingSolver(brain, params=ps)
 
 vs_, *_ = solver.solution_fields()
-REFERENCE_SOLUTION = pd.read_pickle(DATAPATH / "initial_conditions/REFERENCE_SOLUTION.xz").values
+#REFERENCE_SOLUTION = pd.read_pickle(DATAPATH / "initial_conditions/REFERENCE_SOLUTION.xz").values
+REFERENCE_SOLUTION = np.load(str(DATAPATH / "initial_conditions/REFERENCE_SOLUTION.npy"))
 uniform_ic = wei_uniform_ic(data=REFERENCE_SOLUTION, state="fire")      # flat
 
 brain.cell_models().set_initial_conditions(**uniform_ic)
@@ -232,7 +234,8 @@ vs_.assign(model.initial_conditions())
 
 field_spec = FieldSpec(save_as="xdmf", stride_timestep=10)
 
-outpath =  Path.home() / "out/bergen_casedir"
+#outpath =  Path.home() / "out/bergen_casedir"
+outpath =  "bergen_casedir"
 pp_spec = PostProcessorSpec(casedir=outpath)
 
 saver = Saver(pp_spec)
@@ -268,10 +271,8 @@ for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
     saver.update(
         time_const,
         i,
-        {
-            "v": v,
-            "u": u
-        }
+	update_dict
     )
+    break
 saver.close()
 # print(f"Time: {time.clock() - tick}")
