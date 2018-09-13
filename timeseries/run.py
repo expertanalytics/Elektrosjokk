@@ -54,9 +54,8 @@ DATAPATH = Path.home() / BASEDIR / "ECT-data"
 df.set_log_level(100)
 
 time_const = df.Constant(0)
-# dt = 1e-2
-dt = 1e-1
-T = 50.0      # End time in [ms]
+dt = 1e-2
+T = 30.0e3      # End time in [ms]
 mesh = df.Mesh(str(DATAPATH / "meshes/bergenh18/merge.xml.gz"))
 mesh.coordinates()[:] *= 10     # convert from mm to cm
 
@@ -70,14 +69,16 @@ mf = df.MeshFunction("size_t", mesh, str(DATAPATH / "meshes/bergenh18/wm.xml.gz"
 
 # Load the anisotropy
 Vv = df.TensorFunctionSpace(mesh, "CG", 1)
-fiber = df.Function(Vv, str(DATAPATH / "meshes/bergenh18/anisotropy.xml.gz"))
+# fiber = df.Function(Vv, str(DATAPATH / "meshes/bergenh18/anisotropy.xml.gz"))
+M_i = df.Function(Vv, str(DATAPATH / "meshes/bergenh18/intraanisotropy.xml.gz"))
+M_e = df.Function(Vv, str(DATAPATH / "meshes/bergenh18/extraanisotropy.xml.gz"))
 
 
-def get_anisotropy(fiber, iso_value, k=1):
-    """Following Lee-2012 p6.""" 
-    ql = iso_value*k**(2./3)
-    qt = iso_value*k**(-1./3)
-    return fiber*df.diag(df.as_vector([ql, qt, qt]))*fiber.T
+# def get_anisotropy(fiber, iso_value, k=1):
+#     """Following Lee-2012 p6.""" 
+#     ql = iso_value*k**(2./3)
+#     qt = iso_value*k**(-1./3)
+#     return fiber*df.diag(df.as_vector([ql, qt, qt]))*fiber.T
 
 
 @nb.jit(nb.float64[:](nb.float64[:], nb.float64[:, :]), **nbkwargs)
@@ -189,16 +190,13 @@ my_expr = MyExpression(
     degree=1
 )
 
+
 model = Wei()
 brain = CardiacModel(
     mesh,
     time_const,
-    # Units now in mS/mm
-    M_i={0: get_anisotropy(fiber, 1.0), 11: get_anisotropy(fiber, 1.0)        # mS/cm
-    },
-    M_e={
-        0: get_anisotropy(fiber, 2.76), 11: get_anisotropy(fiber, 1.26)     # mS/cm
-    },
+    M_i=M_i,
+    M_e=M_e,
     cell_models=model,
     facet_domains=ff,
     cell_domains=mf,
@@ -268,10 +266,7 @@ for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
     saver.update(
         time_const,
         i,
-        {
-            "v": v,
-            "u": u
-        }
+        update_dict
     )
 saver.close()
 # print(f"Time: {time.clock() - tick}")
