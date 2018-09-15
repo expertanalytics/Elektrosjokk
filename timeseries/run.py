@@ -47,7 +47,6 @@ nbkwargs = {
 }
 
 warnings.simplefilter("ignore", DeprecationWarning)
-
 BASEDIR = "Documents"
 DATAPATH = Path.home() / BASEDIR / "ECT-data"
 
@@ -57,28 +56,25 @@ time_const = df.Constant(0)
 dt = 1e-2
 T = 30.0e3      # End time in [ms]
 mesh = df.Mesh(str(DATAPATH / "meshes/bergenh18/merge.xml.gz"))
-mesh.coordinates()[:] *= 10     # convert from mm to cm
+mesh.coordinates()[:] /= 10     # convert from mm to cm
 
 # Boundary condition facet function
 ff = df.MeshFunction("size_t", mesh, mesh.geometry().dim() - 1)
 ff.set_all(0)
-df.CompiledSubDomain("x[0] > 5 && on_boundary").mark(ff, 11)
+# df.CompiledSubDomain("x[0] > 5 && on_boundary").mark(ff, 11)
+# df.CompiledSubDomain("(x[0] > 5) && (x[1] < -3) && on_boundary").mark(ff, 21)
+df.CompiledSubDomain("pow(x[0] - 3.125, 2) + pow(x[1] - 6.319, 2) + pow(x[2] - 3.20, 2) < 4").mark(ff, 11)
+df.CompiledSubDomain("pow(x[0] + 2.279, 2) + pow(x[1] - 5.325, 2) + pow(x[2] - 3.443, 2) < 4").mark(ff, 21)
+
+df.File("foo/ff.pvd") << ff
 
 # White matter cell function
 mf = df.MeshFunction("size_t", mesh, str(DATAPATH / "meshes/bergenh18/wm.xml.gz"))
 
 # Load the anisotropy
 Vv = df.TensorFunctionSpace(mesh, "CG", 1)
-# fiber = df.Function(Vv, str(DATAPATH / "meshes/bergenh18/anisotropy.xml.gz"))
 M_i = df.Function(Vv, str(DATAPATH / "meshes/bergenh18/intraanisotropy.xml.gz"))
 M_e = df.Function(Vv, str(DATAPATH / "meshes/bergenh18/extraanisotropy.xml.gz"))
-
-
-# def get_anisotropy(fiber, iso_value, k=1):
-#     """Following Lee-2012 p6.""" 
-#     ql = iso_value*k**(2./3)
-#     qt = iso_value*k**(-1./3)
-#     return fiber*df.diag(df.as_vector([ql, qt, qt]))*fiber.T
 
 
 @nb.jit(nb.float64[:](nb.float64[:], nb.float64[:, :]), **nbkwargs)
@@ -116,7 +112,7 @@ def computed_value(x, channel_points, time_array, time_values, time):
 
 if rank == 0:
     # Load the EEG data
-    start_idx = 1663389
+    start_idx = 1663389 + 4765
     stop_idx = start_idx + 300000
     time_series = pd.read_pickle(DATAPATH / "zhi/EEG_signal.xz").values[:, start_idx:stop_idx]
 
@@ -132,7 +128,7 @@ if rank == 0:
             )
         ]
 
-    N = 100
+    N = 2
     print("Only using {} channels".format(N))
     channel_points = np.array(channel_points[:N]).astype(np.float_)
     # Sample rate in 5kHz -- >  now in ms
@@ -182,14 +178,54 @@ class MyExpression(df.Expression):
         return (1,)
 
 
-my_expr = MyExpression(
+REFERENCE_SOLUTION = pd.read_pickle(DATAPATH / "initial_conditions/REFERENCE_SOLUTION.xz").values
+
+
+ch0 = time_series[0, 4765:]
+D1_time_array = np.linspace(0, ch0.size/5, ch0.size)
+
+my_expr_D1 = MyExpression(
     time_const,
-    channel_points,
-    time_array,
-    time_series,
+    channel_points[0][None],
+    D1_time_array,
+    ch0[None],
     degree=1
 )
 
+ch1 = time_series[0, 7095:]
+D2_time_array = np.linspace(0, ch1.size/5, ch1.size)
+my_expr_D2 = MyExpression(
+    time_const,
+    channel_points[1][None],
+    D2_time_array,
+    ch1[None],
+    degree=1
+)
+
+ode_solution_bc1 = REFERENCE_SOLUTION[192340:, 0].astype(np.float64)
+vbc1_time = np.linspace(0, ode_solution_bc1.size/100, ode_solution_bc1.size)
+
+ode_solution_bc2 = REFERENCE_SOLUTION[192340 + 3000:, 0].astype(np.float64)
+vbc2_time = np.linspace(0, ode_solution_bc2.size/100, ode_solution_bc2.size)
+
+vbc_expr1 = MyExpression(
+    time_const,
+    np.array((1.0, 1.0, 1.0))[None],
+    vbc1_time,
+    ode_solution_bc1[None],
+    degree=1
+)
+
+vbc_expr2 = MyExpression(
+    time_const,
+    np.array((1.0, 1.0, 1.0))[None],
+    vbc2_time,
+    ode_solution_bc2[None],
+    degree=1
+)
+
+area1 = df.assemble(df.Constant(1)*df.ds(domain=mesh, subdomain_data=ff, subdomain_id=11))
+area2 = df.assemble(df.Constant(1)*df.ds(domain=mesh, subdomain_data=ff, subdomain_id=21))
 
 model = Wei()
 brain = CardiacModel(
@@ -199,8 +235,8 @@ brain = CardiacModel(
     M_e=M_e,
     cell_models=model,
     facet_domains=ff,
-    cell_domains=mf,
-    dirichlet_bc=[(my_expr, 11)]
+    cell_domains=None,
+    ect_current={11: vbc_expr1/area1, 21: -vbc_expr2/area2}
 )
 
 ps = SplittingSolver.default_parameters()
@@ -222,13 +258,12 @@ df.parameters["form_compiler"]["cpp_optimize_flags"] = flags
 solver = SplittingSolver(brain, params=ps)
 
 vs_, *_ = solver.solution_fields()
-REFERENCE_SOLUTION = pd.read_pickle(DATAPATH / "initial_conditions/REFERENCE_SOLUTION.xz").values
-uniform_ic = wei_uniform_ic(data=REFERENCE_SOLUTION, state="fire")      # flat
+uniform_ic = wei_uniform_ic(data=REFERENCE_SOLUTION, state="flat")      # flat
 
 brain.cell_models().set_initial_conditions(**uniform_ic)
 vs_.assign(model.initial_conditions())
 
-field_spec = FieldSpec(save_as="xdmf", stride_timestep=10)
+field_spec = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=1)
 
 outpath =  Path.home() / "out/bergen_casedir"
 pp_spec = PostProcessorSpec(casedir=outpath)
@@ -237,17 +272,19 @@ saver = Saver(pp_spec)
 saver.store_mesh(mesh, facet_domains=ff)
 saver.add_field(Field("v", field_spec))
 saver.add_field(Field("u", field_spec))
+saver.add_field(Field("vs", field_spec))
 
 
-point_array = np.array([
-    [-46.56, -3.64,-17.89],
-    [34.84, -3.64, 32.11],
-    [1.18, -32.84, 1.59],
-    [1.18, 67.28, 2.79]
-])
-ode_names = ("V", "m","h", "n", "NKo", "NKi", "NNao", "NNai", "NClo", "NCli", "vol", "O")
-for name in ode_names:
-    saver.add_field(PointField(name, field_spec, point_array))
+#point_array = np.array([
+#    [-46.56, -3.64,-17.89],
+#    [34.84, -3.64, 32.11],
+#    [1.18, -32.84, 1.59],
+#    [1.18, 67.28, 2.79]
+#])
+#ode_names = ("V", "m","h", "n", "NKo", "NKi", "NNao", "NNai", "NClo", "NCli", "vol", "O")
+#for name in ode_names:
+#    saver.add_field(PointField(name, field_spec, point_array))
+
 
 theta = ps["theta"]
 
@@ -258,10 +295,11 @@ for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
     print()
     current_t = t0 + theta*(t1 - t0)
     v, u, *_ = vur.split(deepcopy=True)
-    sol = vs.split(deepcopy=True)
+    # sol = vs.split(deepcopy=True)
+    # print(sol[4].vector().array())
 
-    update_dict = {"v": v, "u": u}
-    update_dict.update({name: func for name, func in zip(ode_names, sol)})
+    update_dict = {"v": v, "u": u, "vs": vs}
+    # update_dict.update({name: func for name, func in zip(ode_names, sol)})
 
     saver.update(
         time_const,
