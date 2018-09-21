@@ -61,10 +61,8 @@ mesh.coordinates()[:] /= 10     # convert from mm to cm
 # Boundary condition facet function
 ff = df.MeshFunction("size_t", mesh, mesh.geometry().dim() - 1)
 ff.set_all(0)
-# df.CompiledSubDomain("x[0] > 5 && on_boundary").mark(ff, 11)
-# df.CompiledSubDomain("(x[0] > 5) && (x[1] < -3) && on_boundary").mark(ff, 21)
-df.CompiledSubDomain("pow(x[0] - 3.125, 2) + pow(x[1] - 6.319, 2) + pow(x[2] - 3.20, 2) < 4").mark(ff, 11)
-df.CompiledSubDomain("pow(x[0] + 2.279, 2) + pow(x[1] - 5.325, 2) + pow(x[2] - 3.443, 2) < 1").mark(ff, 21)
+df.CompiledSubDomain("x[0] > 0.5 && on_boundary").mark(ff, 11)
+df.CompiledSubDomain("(x[0] > 0.5) && (x[1] < -0.3) && on_boundary").mark(ff, 21)
 
 df.File("foo/ff.pvd") << ff
 
@@ -224,8 +222,8 @@ vbc_expr2 = MyExpression(
     degree=1
 )
 
-area1 = df.assemble(df.Constant(1)*df.ds(domain=mesh, subdomain_data=ff, subdomain_id=11))
-area2 = df.assemble(df.Constant(1)*df.ds(domain=mesh, subdomain_data=ff, subdomain_id=21))
+# area1 = df.assemble(df.Constant(1)*df.ds(domain=mesh, subdomain_data=ff, subdomain_id=11))
+# area2 = df.assemble(df.Constant(1)*df.ds(domain=mesh, subdomain_data=ff, subdomain_id=21))
 
 model = Wei()
 brain = CardiacModel(
@@ -236,7 +234,7 @@ brain = CardiacModel(
     cell_models=model,
     facet_domains=ff,
     cell_domains=None,
-    ect_current={11: vbc_expr1/area1, 21: -vbc_expr2/area2}
+    dirichlet_bc=[(my_expr_D1, 11), (my_expr_D2, 21)]
 )
 
 ps = SplittingSolver.default_parameters()
@@ -258,21 +256,30 @@ df.parameters["form_compiler"]["cpp_optimize_flags"] = flags
 solver = SplittingSolver(brain, params=ps)
 
 vs_, *_ = solver.solution_fields()
-uniform_ic = wei_uniform_ic(data=REFERENCE_SOLUTION, state="flat")      # flat
+uniform_ic_fire = wei_uniform_ic(data=REFERENCE_SOLUTION, state="fire")
+import IPython
 
-brain.cell_models().set_initial_conditions(**uniform_ic)
-vs_.assign(model.initial_conditions())
+uniform_ic_flat = {
+    str(k)+"_flat": v for k, v in wei_uniform_ic(data=REFERENCE_SOLUTION, state="flat").items()
+}
+
+ic_expr = df.Expression(tuple(
+    "x[0] > 0.5 ? {fire} : {flat}".format(fire=fire, flat=flat)
+    for fire, flat in zip(uniform_ic_fire, uniform_ic_flat)),
+    **uniform_ic_fire, **uniform_ic_flat, degree=1
+)
+vs_.assign(ic_expr)
 
 field_spec = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=1)
 
-outpath =  Path.home() / "out/bergen_casedir"
+timestr = time.strftime("%Y%m%d-%H%M%S")
+outpath = "out/{}".format(timestr)
 pp_spec = PostProcessorSpec(casedir=outpath)
 
 saver = Saver(pp_spec)
 saver.store_mesh(mesh, facet_domains=ff)
 saver.add_field(Field("v", field_spec))
 saver.add_field(Field("u", field_spec))
-saver.add_field(Field("vs", field_spec))
 
 
 #point_array = np.array([
@@ -298,7 +305,7 @@ for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
     # sol = vs.split(deepcopy=True)
     # print(sol[4].vector().array())
 
-    update_dict = {"v": v, "u": u, "vs": vs}
+    update_dict = {"v": v, "u": u}
     # update_dict.update({name: func for name, func in zip(ode_names, sol)})
 
     saver.update(

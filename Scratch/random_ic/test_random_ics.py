@@ -26,6 +26,7 @@ import time
 
 
 def assign_ic(func, data):
+    np.random.seed(42)
     mixed_func_space = func.function_space()
 
     functions = func.split(deepcopy=True)
@@ -33,7 +34,7 @@ def assign_ic(func, data):
     ic_indices = np.random.randint(
         0,
         data.shape[0],
-        size=functions[0].vector().local_size()
+        size=functions[0].vector().local_size(),
     )
     _data = data[ic_indices]
 
@@ -48,7 +49,7 @@ def assign_ic(func, data):
 time_const = df.Constant(0)
 dt = 1e-2
 T = 1e3      # End time in [ms]
-mesh = df.UnitSquareMesh(10, 10)       # 1cm time 1cm
+mesh = df.UnitSquareMesh(20, 20)       # 1cm time 1cm
 
 Mi = df.Constant(2)    # TODO: look these up   in mS/cm
 Me = df.Constant(1)
@@ -90,14 +91,20 @@ assign_ic(vs_, ic_data)
 
 assert np.unique(vs_.vector().array()).size > 12
 
-field_spec = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=1)
-outpath =  Path.home() / "out/bergen_casedir"
+field_spec = FieldSpec(save_as=("xdmf"), stride_timestep=10)
+# outpath =  Path.home() / "out/bergen_casedir"
+timestr = time.strftime("%Y%m%d-%H%M%S")
+outpath = "{}".format(timestr)
 pp_spec = PostProcessorSpec(casedir=outpath)
 
 saver = Saver(pp_spec)
 saver.store_mesh(mesh, facet_domains=None)
 saver.add_field(Field("v", field_spec))
 saver.add_field(Field("u", field_spec))
+
+saver.add_field(Field("NKo", field_spec))
+saver.add_field(Field("NNao", field_spec))
+saver.add_field(Field("NClo", field_spec))
 
 theta = ps["theta"]
 
@@ -107,7 +114,10 @@ for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
     current_t = t0 + theta*(t1 - t0)
     v, u, *_ = vur.split(deepcopy=True)
 
-    update_dict = {"v": v, "u": u}
+    V, m, h, n, NKo, NKi, NNao, NNai, NClo, NCli, vol, O = vs.split(deepcopy=True)
+
+    update_dict = {"v": v, "u": u,
+                   "NKo": NKo, "NNao": NNao, "NClo": NClo}
 
     saver.update(
         time_const,

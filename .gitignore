@@ -121,3 +121,8 @@ figures/
 
 *.png
 *casedir/
+
+*.xz
+*.xml.gz
+out/
+*.out

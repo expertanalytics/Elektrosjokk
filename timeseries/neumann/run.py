@@ -64,7 +64,7 @@ ff.set_all(0)
 # df.CompiledSubDomain("x[0] > 5 && on_boundary").mark(ff, 11)
 # df.CompiledSubDomain("(x[0] > 5) && (x[1] < -3) && on_boundary").mark(ff, 21)
 df.CompiledSubDomain("pow(x[0] - 3.125, 2) + pow(x[1] - 6.319, 2) + pow(x[2] - 3.20, 2) < 4").mark(ff, 11)
-df.CompiledSubDomain("pow(x[0] + 2.279, 2) + pow(x[1] - 5.325, 2) + pow(x[2] - 3.443, 2) < 1").mark(ff, 21)
+df.CompiledSubDomain("pow(x[0] + 2.279, 2) + pow(x[1] - 5.325, 2) + pow(x[2] - 3.443, 2) < 4").mark(ff, 21)
 
 df.File("foo/ff.pvd") << ff
 

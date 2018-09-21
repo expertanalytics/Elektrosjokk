@@ -61,12 +61,9 @@ mesh.coordinates()[:] /= 10     # convert from mm to cm
 # Boundary condition facet function
 ff = df.MeshFunction("size_t", mesh, mesh.geometry().dim() - 1)
 ff.set_all(0)
-# df.CompiledSubDomain("x[0] > 5 && on_boundary").mark(ff, 11)
-# df.CompiledSubDomain("(x[0] > 5) && (x[1] < -3) && on_boundary").mark(ff, 21)
-df.CompiledSubDomain("pow(x[0] - 3.125, 2) + pow(x[1] - 6.319, 2) + pow(x[2] - 3.20, 2) < 4").mark(ff, 11)
-df.CompiledSubDomain("pow(x[0] + 2.279, 2) + pow(x[1] - 5.325, 2) + pow(x[2] - 3.443, 2) < 1").mark(ff, 21)
+df.CompiledSubDomain("x[0] > 5 && on_boundary").mark(ff, 11)
+df.CompiledSubDomain("(x[0] > 5) && (x[1] < -3) && on_boundary").mark(ff, 21)
 
-df.File("foo/ff.pvd") << ff
 
 # White matter cell function
 mf = df.MeshFunction("size_t", mesh, str(DATAPATH / "meshes/bergenh18/wm.xml.gz"))
@@ -177,9 +174,7 @@ class MyExpression(df.Expression):
     def value_type(self):
         return (1,)
 
-
 REFERENCE_SOLUTION = pd.read_pickle(DATAPATH / "initial_conditions/REFERENCE_SOLUTION.xz").values
-
 
 ch0 = time_series[0, 4765:]
 D1_time_array = np.linspace(0, ch0.size/5, ch0.size)
@@ -202,11 +197,13 @@ my_expr_D2 = MyExpression(
     degree=1
 )
 
+
 ode_solution_bc1 = REFERENCE_SOLUTION[192340:, 0].astype(np.float64)
 vbc1_time = np.linspace(0, ode_solution_bc1.size/100, ode_solution_bc1.size)
 
 ode_solution_bc2 = REFERENCE_SOLUTION[192340 + 3000:, 0].astype(np.float64)
 vbc2_time = np.linspace(0, ode_solution_bc2.size/100, ode_solution_bc2.size)
+
 
 vbc_expr1 = MyExpression(
     time_const,
@@ -224,8 +221,10 @@ vbc_expr2 = MyExpression(
     degree=1
 )
 
-area1 = df.assemble(df.Constant(1)*df.ds(domain=mesh, subdomain_data=ff, subdomain_id=11))
-area2 = df.assemble(df.Constant(1)*df.ds(domain=mesh, subdomain_data=ff, subdomain_id=21))
+
+V = df.FunctionSpace(mesh, "CG", 1)
+df.project(my_expr_D1, V)
+
 
 model = Wei()
 brain = CardiacModel(
@@ -236,8 +235,10 @@ brain = CardiacModel(
     cell_models=model,
     facet_domains=ff,
     cell_domains=None,
-    ect_current={11: vbc_expr1/area1, 21: -vbc_expr2/area2}
+    dirichlet_bc=[(my_expr_D1, 11), (my_expr_D2, 21)],
+    dirichlet_bc_v=[(vbc_expr1, 31)]
 )
+
 
 ps = SplittingSolver.default_parameters()
 ps["pde_solver"] = "bidomain"
@@ -258,14 +259,17 @@ df.parameters["form_compiler"]["cpp_optimize_flags"] = flags
 solver = SplittingSolver(brain, params=ps)
 
 vs_, *_ = solver.solution_fields()
-uniform_ic = wei_uniform_ic(data=REFERENCE_SOLUTION, state="flat")      # flat
+uniform_ic = wei_uniform_ic(data=REFERENCE_SOLUTION, state="fire")      # flat
 
 brain.cell_models().set_initial_conditions(**uniform_ic)
 vs_.assign(model.initial_conditions())
 
 field_spec = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=1)
 
-outpath =  Path.home() / "out/bergen_casedir"
+# outpath =  Path.home() / "out/bergen_casedir"
+
+timestr = time.strftime("%Y%m%d-%H%M%S")
+outpath = "out/{}".format(timestr)
 pp_spec = PostProcessorSpec(casedir=outpath)
 
 saver = Saver(pp_spec)
@@ -307,4 +311,3 @@ for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
         update_dict
     )
 saver.close()
-# print(f"Time: {time.clock() - tick}")
