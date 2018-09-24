@@ -37,6 +37,7 @@ def solve(model: xb.CardiacCellModel, dt: float, interval: Tuple[float, float]) 
 
     # Set up solver
     solver_params = xb.SingleCellSolver.default_parameters()
+    solver_params["scheme"] = "GRL1"
     solver = xb.SingleCellSolver(model, time, params=solver_params)
 
     # Assign initial conditions

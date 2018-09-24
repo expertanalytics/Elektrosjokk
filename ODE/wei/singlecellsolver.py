@@ -47,14 +47,15 @@ def solve(model, dt, interval):
     return np.asarray(times), np.asarray(values)
 
 
-def plot_ode(time, value, label):
+def plot_ode(time, value, label, dt=0.1):
+    N = int(1 / dt)
     fig = plt.figure(figsize=(14, 14))
     fig.suptitle("ODE plot", size=52)
 
     ax = fig.add_subplot(111)
     # ax.grid(True)  # ???
 
-    ax.plot(time, value, label=label, linewidth=2)
+    ax.plot(time[::N], value[::N], label=label, linewidth=2)
     ax.legend(fontsize=24)
     ax.set_xlabel("Time ms")
     fig.savefig(f"plots/{label}.png")
@@ -66,8 +67,10 @@ if __name__ == "__main__":
     from pathlib import Path
     df_path = Path("ode_solution.xz")
 
-    dt = 0.01
+    # dt = 0.01
+    dt = 0.1
     interval = (0.0, 120000.0)
+
     model = get_model()
 
     if df_path.exists():
@@ -77,10 +80,14 @@ if __name__ == "__main__":
         dataframe = pd.DataFrame(np.concatenate((times[:,None], values), axis=1))
         dataframe.to_pickle(str(df_path))
 
-    time = dataframe.values[:, 0]
+    times = dataframe.values[:, 0]
     values = dataframe.values[:, 1:].T
 
+    # times, values = solve(model, dt, interval)
     sns.set()
-    labels = ("V", "m", "h", "n", "NKo", "NKi", "NNao", "NNai","NClo", "NCli", "vol", "O")
-    for value, label in zip(values, labels):
-        plot_ode(time, value, label)
+    # plot_ode(times[7000000:7010000], values[0][7000000:7010000], "V")
+    plot_ode(times[700000:701000], values[0][700000:701000], "V")
+
+    # labels = ("V", "m", "h", "n", "NKo", "NKi", "NNao", "NNai","NClo", "NCli", "vol", "O")
+    # for value, label in zip(values, labels):
+    #     plot_ode(times, value, label)

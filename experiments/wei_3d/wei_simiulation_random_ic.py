@@ -8,7 +8,7 @@ from xalbrain import (
     CardiacModel,
 )
 
-from xalbrain.cellmodels import Cressman, Wei
+from xalbrain.cellmodels import Wei
 
 from postfields import (
     Field,
@@ -34,6 +34,35 @@ from typing import (
 )
 
 
+def assign_random_ic(func: df.Function, data: np.ndarray, seed: int=42) -> None:
+    """Assign randomly sampled initial conditions to `func` sampled from `data`.
+
+    Arguments:
+        func: Assign initial conditions to `fuinc`.
+        data: Array of shape (X, N), where X is sufficiently large and N is the dimenson of the
+            function.
+    """
+    mixed_func_space = func.function_space()                    # Receiving function space.
+
+    functions = func.split(deepcopy=True)                       # For asiging component wise.
+    V = df.FunctionSpace(mixed_func_space.mesh(), "CG", 1)      # Assigning function space.
+
+    # Get random indices fromo data.
+    rngesus = np.random.RandomState(seed)
+    ic_indices = rngesus.randint(
+        0,
+        data.shape[0],
+        size=functions[0].vector().local_size(),
+    )
+
+    for i, f in enumerate(functions):
+        ic_func = df.Function(V)
+        ic_func.vector()[:] = np.array(data[ic_indices][:, i])
+
+        assigner = df.FunctionAssigner(mixed_func_space.sub(i), V)
+        assigner.assign(func.sub(i), ic_func)
+
+
 def get_mesh() -> df.Mesh:
     """Create the mesh."""
     mesh = df.UnitCubeMesh(20, 20, 20)       # 1cm time 1cm
@@ -43,7 +72,7 @@ def get_mesh() -> df.Mesh:
 
 def get_conductivities() -> Tuple[Any, Any]:
     """Create the conductivities."""
-    Mi = df.Constant(2)     # mS/cm
+    Mi = df.Constant(2)    # TODO: look these up   in mS/cm
     Me = df.Constant(1)
     return Mi, Me
 
@@ -91,7 +120,7 @@ def get_brain(interval: float) -> CardiacModel:
     time_const = df.Constant(0)
     ff = get_facet_functions(mesh)
     ect_current_dict = get_ect_current(time_const, interval, ff, (11, 21))
-    model = Cressman()
+    model = Wei()
     brain = CardiacModel(
         mesh,
         time_const,
@@ -127,10 +156,13 @@ def get_solver(brain: CardiacModel) -> Any:
 
 
 def assign_initial_conditions(solver: Any) -> None:
+    """Assign initial conditions."""
+    ic_data = np.load(Path.home() / "Documents/ECT-data/initial_conditions/Wei/REFERENCE_SOLUTION.npy")
     brain = solver.model
     model = brain.cell_models
     vs_, *_ = solver.solution_fields()
-    vs_.assign(model.initial_conditions())
+    assign_random_ic(vs_, ic_data) 
+    assert np.unique(vs_.vector().array()).size > 12        # Check that it is random
 
 
 def get_post_processor(outpath: str, time_stamp: bool=True, home: bool=False) -> Saver:
@@ -149,9 +181,9 @@ def get_post_processor(outpath: str, time_stamp: bool=True, home: bool=False) ->
     field_spec = FieldSpec(save_as=("xdmf"), stride_timestep=10)
     saver.add_field(Field("v", field_spec))
     saver.add_field(Field("u", field_spec))
-    # saver.add_field(Field("NKo", field_spec))
-    # saver.add_field(Field("NNao", field_spec))
-    # saver.add_field(Field("NClo", field_spec))
+    saver.add_field(Field("NKo", field_spec))
+    saver.add_field(Field("NNao", field_spec))
+    saver.add_field(Field("NClo", field_spec))
     return saver
 
 
