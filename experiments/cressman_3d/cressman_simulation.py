@@ -146,12 +146,17 @@ def get_post_processor(outpath: str, time_stamp: bool=True, home: bool=False) ->
     mesh = get_mesh()
     saver.store_mesh(mesh, facet_domains=None)
 
-    field_spec = FieldSpec(save_as=("xdmf"), stride_timestep=10)
+    field_spec = FieldSpec(save_as=("hdf5", "xdmf"), stride_timestep=10)
     saver.add_field(Field("v", field_spec))
     saver.add_field(Field("u", field_spec))
-    # saver.add_field(Field("NKo", field_spec))
-    # saver.add_field(Field("NNao", field_spec))
-    # saver.add_field(Field("NClo", field_spec))
+
+    points = np.zeros(shape=(11, 3))
+    points[:, 0] = np.arange(11)/100      # To cm   range (0.0, 0.01)
+    saver.add_field(PointField("point_u", FieldSpec(stride_timestep=10), points))
+    saver.add_field(PointField("point_v", FieldSpec(stride_timestep=10), points))
+    saver.add_field(PointField("point_Ca", FieldSpec(stride_timestep=10), points))
+    saver.add_field(PointField("point_K", FieldSpec(stride_timestep=10), points))
+    saver.add_field(PointField("point_Na", FieldSpec(stride_timestep=10), points))
     return saver
 
 
@@ -169,13 +174,15 @@ def main(dt: float, T: float) -> None:
         current_t = t0 + theta*(t1 - t0)
         v, u, *_ = vur.split(deepcopy=True)
 
-        # V, m, h, n, NKo, NKi, NNao, NNai, NClo, NCli, vol, O = vs.split(deepcopy=True)
+        V, m, h, n, Ca, K, Na = vs.split(deepcopy=True)
         update_dict = {
             "v": v,
             "u": u,
-            # "NKo": NKo,
-            # "NNao": NNao,
-            # "NClo": NClo
+            "point_v": v,
+            "point_u": u,
+            "point_Ca": Ca,
+            "point_K": K,
+            "point_Na": Na,
         }
 
         saver.update(
@@ -187,7 +194,7 @@ def main(dt: float, T: float) -> None:
 
 
 if __name__ == "__main__":
-    dt = 5e-1
+    dt = 1e0
     # T = 30e3      # End time in [ms]
     T = 1e2      # End time in [ms]
     main(dt, T)

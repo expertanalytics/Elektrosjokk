@@ -178,20 +178,28 @@ def get_post_processor(outpath: str, time_stamp: bool=True, home: bool=False) ->
     mesh = get_mesh()
     saver.store_mesh(mesh, facet_domains=None)
 
-    field_spec = FieldSpec(save_as=("xdmf"), stride_timestep=10)
+    field_spec = FieldSpec(save_as=("hdf5", "xdmf"), stride_timestep=10)
     saver.add_field(Field("v", field_spec))
     saver.add_field(Field("u", field_spec))
-    saver.add_field(Field("NKo", field_spec))
-    saver.add_field(Field("NNao", field_spec))
-    saver.add_field(Field("NClo", field_spec))
+
+    points = np.zeros(shape=(11, 3))
+    points[:, 0] = np.arange(11)/100      # To cm   range (0.0, 0.01)
+    saver.add_field(PointField("point_u", field_spec, points))
+    saver.add_field(PointField("point_v", field_spec, points))
+    saver.add_field(PointField("point_NKo", field_spec, points))
+    saver.add_field(PointField("point_NNao", field_spec, points))
+    saver.add_field(PointField("point_NClo", field_spec, points))
+    saver.add_field(PointField("point_O", field_spec, points))
+    saver.add_field(PointField("point_Vol", field_spec, points))
     return saver
 
 
 def main(dt: float, T: float) -> None:
+    """Main solution loop."""
     brain = get_brain(T)
     solver = get_solver(brain)
     assign_initial_conditions(solver)
-    saver = get_post_processor(outpath="out_cressman", time_stamp=True)
+    saver = get_post_processor(outpath="out_wei", time_stamp=True)
 
     theta = solver.parameters["theta"]
     for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve((0, T), dt)):
@@ -201,13 +209,17 @@ def main(dt: float, T: float) -> None:
         current_t = t0 + theta*(t1 - t0)
         v, u, *_ = vur.split(deepcopy=True)
 
-        # V, m, h, n, NKo, NKi, NNao, NNai, NClo, NCli, vol, O = vs.split(deepcopy=True)
+        V, m, h, n, NKo, NKi, NNao, NNai, NClo, NCli, Vol, O = vs.split(deepcopy=True)
         update_dict = {
             "v": v,
             "u": u,
-            # "NKo": NKo,
-            # "NNao": NNao,
-            # "NClo": NClo
+            "point_v": v,
+            "point_u": u,
+            "point_NKo": NKo,
+            "point_NNao": NNao,
+            "point_NClo": NClo
+            "point_O": O,
+            "point_Vol": Vol
         }
 
         saver.update(
@@ -219,7 +231,7 @@ def main(dt: float, T: float) -> None:
 
 
 if __name__ == "__main__":
-    dt = 5e-1
+    dt = 1e0
     # T = 30e3      # End time in [ms]
     T = 1e2      # End time in [ms]
     main(dt, T)
