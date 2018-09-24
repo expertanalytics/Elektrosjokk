@@ -102,7 +102,7 @@ def get_ect_current(
         ) for i in keys
     ]
 
-    amplitude = 3   # mA/cm^2
+    amplitude = 3/2   # mA/cm^2     # /2 because we have a positive and negative lead
     period = 1000   # ms
     duration = 600  # ms
 
