@@ -92,15 +92,26 @@ def get_I_ext(interval: float, amplitude: float, period: float, duration: float)
 class ECT_current(df.Expression):
     """Expresion for forcing Neumann boundary condition."""
 
-    def __init__(self, time, interval, amplitude, period, duration, area, **kwargs) -> None:
+    def __init__(
+            self,
+            time,
+            T,
+            interval,
+            amplitude,
+            period,
+            duration,
+            area,
+            **kwargs
+    ) -> None:
         """Create an interolated forcing function."""
         self.time = time
         self.area = area
         self.I_ext_callable = get_I_ext(interval, amplitude, period, duration)
+        self.final_time = T
 
     def eval(self, value, x) -> None:
         """Evaluate the interpolated function and scale by area."""
-        value[0] = self.I_ext_callable(self.time(0))/self.area
+        value[0] = self.I_ext_callable(self.time(0))/self.area*(self.time(0) > self.final_time)
 
 
 def  _example1():

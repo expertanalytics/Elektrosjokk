@@ -105,11 +105,12 @@ def get_ect_current(
     amplitude = 3/2   # mA/cm^2     # /2 because we have a positive and negative lead
     period = 1000   # ms
     duration = 600  # ms
+    T = 1e9         # ms (stimulate until)
 
     ect_current_dict = {
         0: df.Constant(0),
-        keys[0]: ECT_current(time, interval, amplitude, period, duration, area_list[0], degree=1),
-        keys[1]: -ECT_current(time, interval, amplitude, period, duration, area_list[1], degree=1)
+        keys[0]: ECT_current(time, T, interval, amplitude, period, duration, area_list[0], degree=1),
+        keys[1]: -ECT_current(time, T, interval, amplitude, period, duration, area_list[1], degree=1)
     }
     return ect_current_dict
 
@@ -178,7 +179,7 @@ def get_post_processor(outpath: str, time_stamp: bool=True, home: bool=False) ->
     mesh = get_mesh()
     saver.store_mesh(mesh, facet_domains=None)
 
-    field_spec = FieldSpec(save_as=("hdf5", "xdmf"), stride_timestep=10)
+    field_spec = FieldSpec(save_as=("hdf5", "xdmf"), stride_timestep=1)
     saver.add_field(Field("v", field_spec))
     saver.add_field(Field("u", field_spec))
 
@@ -217,7 +218,7 @@ def main(dt: float, T: float) -> None:
             "point_u": u,
             "point_NKo": NKo,
             "point_NNao": NNao,
-            "point_NClo": NClo
+            "point_NClo": NClo,
             "point_O": O,
             "point_Vol": Vol
         }
@@ -232,6 +233,6 @@ def main(dt: float, T: float) -> None:
 
 if __name__ == "__main__":
     dt = 1e0
-    # T = 30e3      # End time in [ms]
-    T = 1e2      # End time in [ms]
+    T = 10e3      # End time in [ms]
+    # T = 1e2      # End time in [ms]
     main(dt, T)

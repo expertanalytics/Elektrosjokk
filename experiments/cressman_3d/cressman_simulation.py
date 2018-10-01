@@ -146,17 +146,17 @@ def get_post_processor(outpath: str, time_stamp: bool=True, home: bool=False) ->
     mesh = get_mesh()
     saver.store_mesh(mesh, facet_domains=None)
 
-    field_spec = FieldSpec(save_as=("hdf5", "xdmf"), stride_timestep=10)
+    field_spec = FieldSpec(save_as=("hdf5", "xdmf"), stride_timestep=1)
     saver.add_field(Field("v", field_spec))
     saver.add_field(Field("u", field_spec))
 
     points = np.zeros(shape=(11, 3))
     points[:, 0] = np.arange(11)/100      # To cm   range (0.0, 0.01)
-    saver.add_field(PointField("point_u", FieldSpec(stride_timestep=10), points))
-    saver.add_field(PointField("point_v", FieldSpec(stride_timestep=10), points))
-    saver.add_field(PointField("point_Ca", FieldSpec(stride_timestep=10), points))
-    saver.add_field(PointField("point_K", FieldSpec(stride_timestep=10), points))
-    saver.add_field(PointField("point_Na", FieldSpec(stride_timestep=10), points))
+    saver.add_field(PointField("point_u", field_spec, points))
+    saver.add_field(PointField("point_v", field_spec, points))
+    saver.add_field(PointField("point_Ca", field_spec, points))
+    saver.add_field(PointField("point_K", field_spec, points))
+    saver.add_field(PointField("point_Na", field_spec, points))
     return saver
 
 
@@ -193,8 +193,9 @@ def main(dt: float, T: float) -> None:
     saver.close()       # TODO: Add context handler?
 
 
+
 if __name__ == "__main__":
-    dt = 1e0
-    # T = 30e3      # End time in [ms]
-    T = 1e2      # End time in [ms]
+    dt = 1e-1
+    T = 10e3      # End time in [ms]
+    # T = 1e2      # End time in [ms]
     main(dt, T)

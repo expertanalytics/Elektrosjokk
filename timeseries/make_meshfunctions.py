@@ -165,7 +165,6 @@ class WM(df.SubDomain):
 if __name__ == "__main__":
     DATAPATH = Path.home() / "Documents/ECT-data"
 
-
     mesh = df.Mesh(str(DATAPATH /  "meshes/bergenh18/merge.xml.gz"))
     wm_img = nib.load(str(DATAPATH / "zhi/wm.seg.mgz"))
     wm_vox2ras = wm_img.header.get_vox2ras_tkr()

@@ -86,8 +86,8 @@ if __name__ == "__main__":
     # times, values = solve(model, dt, interval)
     sns.set()
     # plot_ode(times[7000000:7010000], values[0][7000000:7010000], "V")
-    plot_ode(times[700000:701000], values[0][700000:701000], "V")
+    # plot_ode(times[700000:701000], values[0][700000:701000], "V")
 
-    # labels = ("V", "m", "h", "n", "NKo", "NKi", "NNao", "NNai","NClo", "NCli", "vol", "O")
-    # for value, label in zip(values, labels):
-    #     plot_ode(times, value, label)
+    labels = ("V", "m", "h", "n", "NKo", "NKi", "NNao", "NNai","NClo", "NCli", "vol", "O")
+    for value, label in zip(values, labels):
+        plot_ode(times, value, label)
