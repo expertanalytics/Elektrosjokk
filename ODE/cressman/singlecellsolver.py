@@ -28,6 +28,7 @@ def plot_ode(time, value, label):
 def get_model() -> Cressman:
     """Set up the cell model with parameters."""
     model_params = Cressman.default_parameters()
+    model_params["Koinf"] = 8
     model = Cressman(params=model_params)
     return model
 
@@ -36,9 +37,11 @@ def solve(model: xb.CardiacCellModel, dt: float, interval: Tuple[float, float]) 
     time = df.Constant(0)
 
     # Set up solver
-    solver_params = xb.SingleCellSolver.default_parameters()
-    solver_params["scheme"] = "GRL1"
-    solver = xb.SingleCellSolver(model, time, params=solver_params)
+    solver_params = xb.BasicSingleCellSolver.default_parameters()
+    # solver_params["scheme"] = "GRL1"
+    solver_params["V_polynomial_family"] = "CG"
+    solver_params["V_polynomial_degree"] = 1
+    solver = xb.BasicSingleCellSolver(model, time, params=solver_params)
 
     # Assign initial conditions
     vs_, vs = solver.solution_fields()
@@ -56,6 +59,8 @@ def solve(model: xb.CardiacCellModel, dt: float, interval: Tuple[float, float]) 
 
 
 if __name__ == "__main__":
+    df.set_log_level(100)
+
     from pathlib import Path
     df_path = Path("cressman_solution.xz")
 

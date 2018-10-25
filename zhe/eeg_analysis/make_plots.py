@@ -117,14 +117,21 @@ def make_three_plots():
 
 
 if __name__ == "__main__":
-    data = get_data(full=True)[0, :]
+    data = get_data(full=True)
     print(data.shape)
 
-    plot_data(
-        "channel1_stimulus_seizure_supression",
-        data,
-        "The events of an ECT treatment",
-        start=int(4e6),
-        N=1,
-        lines=[78000, 822000]
-    )
+    # start = int(4e6)
+    start = int(805*5000)
+    stop = start + 8*5000
+    plot_data("foo", data[0, :], "stimulus", start=start, N=1, stop=stop)
+
+    # for i in (1, 14, 32, 56):
+    #     my_data = data[i, :]
+    #     plot_data(
+    #         "channel1_stimulus_seizure_supression_{}".format(i),
+    #         my_data,
+    #         "The events of an ECT treatment",
+    #         start=int(4e6),
+    #         N=1,
+    #         lines=[78000, 822000]
+    #     )

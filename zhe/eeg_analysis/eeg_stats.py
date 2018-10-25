@@ -8,35 +8,6 @@ from boxplot_eeg import get_data
 import scipy.signal as sig
 
 
-def find_maxima(data):
-    print(data.size)
-    sample_rate = 5000
-    period = 40 # ms
-
-    # num_boxes = 20
-    num_boxes = int(1e5)
-    box_period = 7450
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-
-    time = np.linspace(0, 1, data.size)
-    ax.plot(time[:num_boxes*box_period], data[:num_boxes*box_period])
-    time.shape = (-1, box_period)
-    # Find places where it chenges sign
-
-    # First step is to reshape data into (bathch, batch_length)
-
-    # data.shape = (-1, period*sample_rate)
-    data.shape = (-1, box_period)
-    maxima = np.argmax(data, axis=-1)
-
-    max_times = time[np.arange(maxima.size), maxima]
-
-    for m in filter(lambda x: x != 0 and x != 250 - 1, max_times[:num_boxes]):
-        ax.axvline(m, color="k", linestyle="--")
-    fig.savefig("foo.png")
-
-
 def butter_lowpass_filter(data, cutoff, fs=5000, order=8):
 
     def butter_lowpass(cutoff, fs, order=5):
@@ -48,7 +19,6 @@ def butter_lowpass_filter(data, cutoff, fs=5000, order=8):
     b, a = butter_lowpass(cutoff, fs, order=order)
     y = sig.filtfilt(b, a, data)
     return y
-
 
 def find_peaks_v2(data, name=None):
     time = np.linspace(0, data.size/5000, data.size)        # in ms
@@ -99,7 +69,8 @@ def find_peaks_v2(data, name=None):
 
 if __name__ == "__main__":
     start = int(4e6)
-    # data = get_data(full=True)[0, :]
+    data = get_data(full=True)[:, start + 78000:start + 820000]
+    print(data.shape)
     # print(data.shape)
     # plot_data("channel1_stimulus_seizure_supression", data, start=int(4e6), N=1, lines=[75000, 820000])
     # plot_data("channel1_stimulus", data, start=start, stop=start + 7500)
@@ -111,25 +82,30 @@ if __name__ == "__main__":
     # plot_data("bar", data[start:start + 50000])
 
     # midsection = np.save("midsectioon.npy", data[start + 78000: start + 822000])
-    midsection = np.load("midsectioon.npy")
-    peaks, properties = find_peaks_v2(midsection, "eeg_spikes")
+    # midsection = np.load("midsectioon.npy")
 
-    dp = np.diff(peaks)/5000
-    print(dp.mean(), dp.std())
-    assert False
-    time = np.linspace(0, midsection.size/5000, dp.size)
 
-    fig = plt.figure(figsize=(20, 6))
-    ax = fig.add_subplot(111)
-    ax.plot(time, dp)
-    ax.set_title("Time between spikes for the duration of the seizure", fontsize=32)
-    ax.set_xlabel("Time [s]", fontsize=20)
-    ax.set_ylabel(r"$\Delta t$ [ms]", fontsize=20)
+    for i in (0, 1, 14, 24, 32, 56):
+        midsection = data[i]
+        peaks, properties = find_peaks_v2(midsection, "eeg_spikes_{}".format(i))
 
-    plt.tick_params(axis='both', which='major', labelsize=14)
-    plt.tick_params(axis='both', which='minor', labelsize=12)
+        dp = np.diff(peaks)/5
+        print(i, dp.mean(), dp.std())
+        time = np.linspace(0, midsection.size/5000, dp.size)
 
-    fig.savefig("time_between_spikes.png")
+        fig = plt.figure(figsize=(20, 6))
+        ax = fig.add_subplot(111)
+        ax.plot(time, dp)
+        ax.set_title("Time between spikes for the duration of the seizure", fontsize=32)
+        ax.set_xlabel("Time [s]", fontsize=20)
+        ax.set_ylabel(r"$\Delta t$ [ms]", fontsize=20)
+
+        plt.tick_params(axis='both', which='major', labelsize=14)
+        plt.tick_params(axis='both', which='minor', labelsize=12)
+
+        fig.savefig("time_between_spikes.png")
+        del fig
+        break
 
     # batch = 5*5000
     # i = 0
