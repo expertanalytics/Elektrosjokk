@@ -4,9 +4,9 @@ import numpy as np
 
 from pathlib import Path
 
-from typing import(
+from typing import (
     Iterator,
-    List
+    List,
 )
 
 

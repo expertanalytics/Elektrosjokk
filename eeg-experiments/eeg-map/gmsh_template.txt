@@ -1,0 +1,9 @@
+Line(101) = {1, 2};
+Line(102) = {2, 3};
+Line(103) = {3, 4};
+Line(104) = {4, 1};
+
+Line Loop(201) = {101, 102, 103, 104};
+Plane Surface(301) = {201};
+
+// Protected points

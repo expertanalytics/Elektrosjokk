@@ -126,3 +126,7 @@ figures/
 *.xml.gz
 out/
 *.out
+
+out_*/
+2018*/
+2019*/

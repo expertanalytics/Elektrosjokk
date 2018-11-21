@@ -17,12 +17,12 @@ def get_positions(ect_dir_path: str="Documents/ECT-data") -> np.ndarray:
         delimiter=",",
         usecols=(2, 3, 4)
     )
-    return data
+    x, y, _ =  data.T
+    return x, y
 
 
 if __name__ == "__main__":
-    pos = get_positions()
-    x, y, _ = pos.T
+    x, y = get_positions()
 
     # Define rectangle
     gmsh_text_file = "h = 1;\n"
@@ -62,9 +62,8 @@ if __name__ == "__main__":
 
     result = subprocess.check_output([
         "meshio-convert",
+        "--prune-z-0",
         "gmsh_meshing/protected_points.msh",
         "gmsh_meshing/protected_points.xml"
     ])
     print(result.decode("utf-8"))
-
-

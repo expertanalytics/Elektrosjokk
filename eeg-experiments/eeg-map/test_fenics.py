@@ -52,7 +52,9 @@ def get_positions(ect_dir_path: str="Documents/ECT-data") -> np.ndarray:
     return x, y
 
 
-my_points = list(zip(*get_positions()))
+x, y = get_positions()
+print(x.shape, y.shape)
+my_points = list(zip(x, y))
 mesh = df.Mesh("gmsh_meshing/protected_points.xml")
 coordinates = mesh.coordinates()[:, :2]
 
@@ -76,14 +78,16 @@ dv_map = df.dof_to_vertex_map(function_space)
 
 coeffs = np.zeros(shape=vd_map.size)
 
-
 A = df.assemble(lhs)
 
 solver = df.KrylovSolver("cg", "amg")
 solver.set_operator(A)
 
-# maxlist = []
-# minlist = []
+maxlist = []
+minlist = []
+
+
+z_index_set = set(range(64)) - {30, 31, 61}
 
 # EEG values
 all_eeg_channels = get_eeg_value()
@@ -93,7 +97,8 @@ for i in range(1000):
     z = all_eeg_channels[:, time]
 
     # FIXME: This is proof of concept. Find the defective channel indices
-    coeffs[vd_map[mesh_point_indices]] = z[:vd_map[mesh_point_indices].size]
+
+    coeffs[vd_map[mesh_point_indices]] = z[list(z_index_set)]
     func.vector().set_local(coeffs)
 
     rhs = func*v*df.dx
@@ -103,13 +108,13 @@ for i in range(1000):
     solver.solve(solution_function.vector(), bb)
     assert solution_function.vector().norm("l2")/solution_function.vector().size() < 1e9
 
-    # maxlist.append(solution_function.vector().get_local().max())
-    # minlist.append(solution_function.vector().get_local().min())
+    maxlist.append(solution_function.vector().get_local().max())
+    minlist.append(solution_function.vector().get_local().min())
 
     fig, ax = mplot_function(
         solution_function,
-        vmin=-750,
-        vmax=750,
+        vmin=-500,
+        vmax=500,
         colourbar=True,
         colourbar_label="$\mu V$"
     )
@@ -120,5 +125,5 @@ for i in range(1000):
     fig.savefig("figures/eeg{:04d}.png".format(i))
     plt.close(fig)
 
-# print(max(maxlist))
-# print(min(minlist))
+print(max(maxlist))
+print(min(minlist))
