@@ -20,6 +20,8 @@ def plot_data(
         background=None,
         figsize=None
 ):
+    import seaborn as sns
+    sns.set()
     times = np.linspace(0, data[start:stop:N].size/5000, data[start:stop:N].size)
 
     if lines is None:
@@ -92,38 +94,39 @@ def make_three_plots():
         lines=[78000, 822000]
     )
 
-    plot_data(
-        "channel1_stimulus",
-        data,
-        "The stimulus",
-        start=start,
-        stop=start + 78000
-    )
+    # plot_data(
+    #     "channel1_stimulus",
+    #     data,
+    #     "The stimulus",
+    #     start=start,
+    #     stop=start + 78000
+    # )
 
-    plot_data(
-        "channel1_seizure",
-        data,
-        "The seizure",
-        start=start + 78000,
-        stop=start + 822000
-    )
+    # plot_data(
+    #     "channel1_seizure",
+    #     data,
+    #     "The seizure",
+    #     start=start + 78000,
+    #     stop=start + 822000
+    # )
 
-    plot_data(
-        "channel1_supression",
-        data,
-        "Post ictal supression",
-        start=start + 822000
-    )
+    # plot_data(
+    #     "channel1_supression",
+    #     data,
+    #     "Post ictal supression",
+    #     start=start + 822000
+    # )
 
 
 if __name__ == "__main__":
-    data = get_data(full=True)
-    print(data.shape)
+    make_three_plots()
+    # data = get_data(full=True)
+    # print(data.shape)
 
-    # start = int(4e6)
-    start = int(805*5000)
-    stop = start + 8*5000
-    plot_data("foo", data[0, :], "stimulus", start=start, N=1, stop=stop)
+    # # start = int(4e6)
+    # start = int(805*5000)
+    # stop = start + 8*5000
+    # plot_data("foo", data[0, :], "stimulus", start=start, N=1, stop=stop)
 
     # for i in (1, 14, 32, 56):
     #     my_data = data[i, :]

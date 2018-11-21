@@ -31,9 +31,9 @@ def compare_loglogfft(data_list, fs=5000, filename=None):
         ax.plot(t, sp_power)
         ax.set_xscale("log")
         ax.set_yscale("log")
-        ax.set_title(data_title, fontsize=16)
-        ax.set_xlabel(r"$Hz$", fontsize=12)
-        ax.set_ylabel(r"$fft(eeg).real^2$", fontsize=12)
+        ax.set_title(data_title, fontsize=18)
+        ax.set_xlabel(r"$Hz$", fontsize=14)
+        ax.set_ylabel(r"$fft(eeg).real^2$", fontsize=14)
         ax.grid(True)
 
     if filename is None:
