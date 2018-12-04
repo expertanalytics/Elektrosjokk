@@ -12,6 +12,8 @@ from typing import List
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
+from matplotlib.collections import PatchCollection
+
 font = {
     "family": "DejaVu Sans",
     "weight": "bold",
@@ -83,9 +85,18 @@ A = df.assemble(lhs)
 solver = df.KrylovSolver("cg", "amg")
 solver.set_operator(A)
 
-maxlist = []
-minlist = []
+# maxlist = []
+# minlist = []
 
+xy_points = np.loadtxt("head_outline.csv", delimiter=",", usecols=(0, 1), skiprows=1)
+xy_points /= 10     # Scale to cm
+centroid = np.sum(xy_points, axis=0)/xy_points.shape[0]
+sort_indices = np.argsort(np.arctan2(
+    xy_points[:, 1] - centroid[1],
+    xy_points[:, 0] - centroid[0]
+))
+xy_points = xy_points[sort_indices]
+poly = plt.Polygon(xy_points, closed=True)
 
 z_index_set = set(range(64)) - {30, 31, 61}
 
@@ -108,8 +119,8 @@ for i in range(1000):
     solver.solve(solution_function.vector(), bb)
     assert solution_function.vector().norm("l2")/solution_function.vector().size() < 1e9
 
-    maxlist.append(solution_function.vector().get_local().max())
-    minlist.append(solution_function.vector().get_local().min())
+    # maxlist.append(solution_function.vector().get_local().max())
+    # minlist.append(solution_function.vector().get_local().min())
 
     fig, ax = mplot_function(
         solution_function,
@@ -118,12 +129,15 @@ for i in range(1000):
         colourbar=True,
         colourbar_label="$\mu V$"
     )
+    patch_collection_poly = PatchCollection([poly], alpha=0.5, color="tab:gray")
+    ax.add_collection(patch_collection_poly)
 
     ax.set_xlabel("cm")
     ax.set_ylabel("cm")
     ax.set_title("$u^*$")
+    ax.grid(True)
     fig.savefig("figures/eeg{:04d}.png".format(i))
     plt.close(fig)
 
-print(max(maxlist))
-print(min(minlist))
+# print(max(maxlist))
+# print(min(minlist))

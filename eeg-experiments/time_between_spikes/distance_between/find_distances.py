@@ -69,6 +69,12 @@ def get_pairs(data, r=9):
     return point_pairs
 
 
+def get_knearest(data, points, k=1):
+    tree = cKDTree(data)
+    point_pairs = tree.query(points, k=k)
+    return point_pairs
+
+
 def compute_distances_loop(data, points):
     distance_list = []
     for i, j in points:
