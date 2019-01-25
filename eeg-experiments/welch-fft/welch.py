@@ -6,14 +6,20 @@ import seaborn as sns
 
 from scipy.signal import welch
 from eegutils import read_zhe_eeg
-from typing import List
 
 
-def get_eeg_value() -> List[float]:
+def get_eeg_value(state="seizure") -> np.ndarray:
     """Read all chanels from the zhi eeg. The hardcoded values correspond to the seizure."""
+
+    index_dict = {
+        "seizure": (4078000, 4902000),
+        "resting": (0, 5000*200)        # 100 s? sampling frequency is 5000  s^-1
+    }
+
+    start, stop = index_dict[state]
     all_channels_seizure = read_zhe_eeg(
-        start=4078000,
-        stop=4902000,
+        start=start,
+        stop=stop,
         full=True
     )
     return all_channels_seizure
@@ -44,7 +50,10 @@ def plot_psd(data, channel_number):
 
 
 if __name__ == "__main__":
-    seizure = get_eeg_value()
+    sns.set()
+
+    seizure = get_eeg_value(state="resting")
+    print("Done loading data")
 
     defunct_channels = {30, 31, 61}
     for i in range(seizure.shape[0]):
