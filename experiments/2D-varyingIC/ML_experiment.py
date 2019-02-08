@@ -1,8 +1,7 @@
 import resource
 import warnings
 import time
-import shutil
-
+import shutil 
 import dolfin as df
 import numpy as np
 import xalbrain as xb
@@ -167,15 +166,15 @@ def run_ML_experiment(
 
 
 if __name__ == "__main__":
-    conductivity_list = (1/8,)
-    KL_list = (1/4,)
+    conductivity_list = (1/64, 1/8, 8)
+    KL_list = (1/2, 1/4,)
     parameter_list = product(conductivity_list, KL_list)
 
-    def experiment(params, N=500, dt=0.025, T=1e2, dimension=2, K1=4, K2=8):
+    def experiment(params, N=500, dt=0.025, T=1e1, dimension=2, K1=4, K2=8):
         """partial function wrapper."""
         conductivity, Kinf_domain_size = params
-        identifier = "M{:3}-L{:3}".format(
-            str(conductivity).replace(".", ""), str(Kinf_domain_size).replace(".", "")
+        identifier = "M{}-L{}".format(
+            str(conductivity).replace(".", "")[:3], str(Kinf_domain_size).replace(".", "")[:3]
         )
         outpath = Path("experimentI") / identifier
         args = (conductivity, Kinf_domain_size, N, dt, T, K1, K2, dimension, outpath)
@@ -185,7 +184,7 @@ if __name__ == "__main__":
     resource_usage = resource.getrusage(resource.RUSAGE_SELF)
 
     tick = time.time()
-    pool = Pool(processes=4)
+    pool = Pool(processes=6)
     identifier_list = pool.map(experiment, parameter_list)
     tock = time.time()
 
