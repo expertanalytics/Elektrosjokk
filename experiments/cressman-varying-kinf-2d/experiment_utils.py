@@ -38,7 +38,8 @@ def get_solver(brain: CardiacModel, ode_dt: int = 1) -> SplittingSolver:
     ps = SplittingSolver.default_parameters()
     ps["pde_solver"] = "monodomain"
     ps["theta"] = 0.5
-    ps["MonodomainSolver"]["linear_solver_type"] = "direct"
+    ps["MonodomainSolver"]["linear_solver_type"] = "iterative"
+    # ps["MonodomainSolver"]["lu_type"] = "petsc"
     ps["BidomainSolver"]["use_avg_u_constraint"] = False
     ps["CardiacODESolver"]["scheme"] = "RK4"
 

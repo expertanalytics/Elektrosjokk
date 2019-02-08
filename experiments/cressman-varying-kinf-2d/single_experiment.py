@@ -183,22 +183,21 @@ def run_ML_experiment(
     tick = time.clock()
     for i, ((t0, t1), (vs_, vs, vur)) in tqdm.tqdm(enumerate(solver.solve((0, T), dt)), total=T/dt - 1):
         if verbose:
-            tock = time.clock()
-            print("Timetep: {:d}, time: {:f}".format(i, tock - tick))
-            tick = tock
+            print("Timetep: {:d}".format(i))
 
         update_dict = {
             "v": vur,
             "point_v": vur,
         }
 
-        tick = time.clock()
         saver.update(
             brain.time,
             i,
             update_dict
         )
         tock = time.clock()
+        print("Solver time: ", tock - tick)
+        tick = tock
     saver.close()       # TODO: Add context handler?
     return identifier
 
@@ -212,7 +211,7 @@ if __name__ == "__main__":
         dt=0.025,
         T=1e3,
         dimension=2,
-        verbose=False
+        verbose=True
     )
     tock = time.clock()
     print("Success! duration: {}".format(tock - tick))
