@@ -106,6 +106,6 @@ def make_report(casedir, dim, verbose=False):
 
 
 if __name__ == "__main__":
-    my_case_dir = Path("test_dt_N_outdir")
+    my_case_dir = Path.home() / "data/experimentV"
     for p in my_case_dir.iterdir():
         make_report(p, dim=1, verbose=True)

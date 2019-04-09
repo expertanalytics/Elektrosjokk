@@ -1,5 +1,4 @@
-"""Utility functions for running experiments."""
-
+import time 
 import dolfin as df
 import numpy as np
 
@@ -8,13 +7,30 @@ from xalbrain import (
     CardiacModel,
 )
 
-from postspec import LoaderSpec
+from xalbrain.cellmodels import Cressman
 
-from post import Loader
+from postfields import (
+    Field,
+    PointField,
+)
+
+from postspec import (
+    FieldSpec,
+    SaverSpec,
+    LoaderSpec,
+)
+
+from post import (
+    Saver,
+    Loader,
+)
 
 from pathlib import Path
 
-from typing import Any
+from typing import (
+    Tuple,
+    Any,
+)
 
 
 def get_mesh(dimension: int, N: int) -> df.Mesh:
@@ -28,19 +44,67 @@ def get_mesh(dimension: int, N: int) -> df.Mesh:
     return mesh
 
 
-def get_conductivities(value: float = 0.5) -> df.Constant:
-    """Create the conductivities."""
-    Mi = df.Constant(value)     # mS/cm
-    return Mi
+def get_Kinf(dimension: int, L: float, K1: float, K2: float) -> df.Expression:
+    """Assume unit square. """
+    if dimension == 1:
+        kinf_str = "x[0] < {d1} || x[0] > {d2} ? {K1} : {K2}"
+    elif dimension == 2:
+        kinf_str = "x[0] < {d1} || x[0] > {d2}"
+        kinf_str += " || x[1] < {d1} || x[1] > {d2} ? {K1}: {K2}"
+    elif dimension == 3:
+        kinf_str = "x[0] < {d1} || x[0] > {d2}"
+        kinf_str += " || x[1] < {d1} || x[1] > {d2}"
+        kinf_str += " || x[2] < {d1} || x[2] > {d2} ? {K1} : {K2}"
+    else:
+        assert False, "Expected dimension in {1, 2, 3}, got {}".format(dimension)
+    Kinf = df.Expression(kinf_str.format(d1=0.5 - L/2, d2=0.5 + L/2, K1=K1, K2=K2), degree=1)
+    return Kinf
 
 
-def get_solver(brain: CardiacModel, ode_dt: int = 1) -> SplittingSolver:
+def get_brain(
+        dimension: int,
+        N: int,
+        conductivity: float,
+        Kinf_domain_size: float,
+        K1: float = 4,
+        K2: float = 8
+) -> CardiacModel:
+    """
+    Create container class for splitting solver parameters
+
+    Arguments:
+        dimension: The topological dimension of the mesh.
+        N: Mesh resolution.
+        conductivity: The conductivity, or rather, the conductivity times a factor.
+        Kinf_domain_size: The side length of the domain where Kinf = 8. In 1D, this is
+            simply the lengt of an interval.
+    """
+    mesh = get_mesh(dimension, N)
+    Mi = df.Constant(conductivity)
+    time_const = df.Constant(0)
+    Kinf = get_Kinf(dimension, Kinf_domain_size, K1, K2)
+
+    model_parameters = Cressman.default_parameters()
+    model_parameters["Koinf"] = Kinf
+    model = Cressman(params=model_parameters)
+    brain = CardiacModel(
+        mesh,
+        time_const,
+        M_i=Mi,
+        M_e=None,
+        cell_models=model,
+    )
+    return brain
+
+
+def get_solver(brain: CardiacModel) -> SplittingSolver:
     ps = SplittingSolver.default_parameters()
     ps["pde_solver"] = "monodomain"
     ps["theta"] = 0.5
-    ps["MonodomainSolver"]["linear_solver_type"] = "iterative"
-    # ps["MonodomainSolver"]["lu_type"] = "petsc"
+    ps["MonodomainSolver"]["linear_solver_type"] = "direct"
     ps["BidomainSolver"]["use_avg_u_constraint"] = False
+
+    # ps["ode_solver_choice"] = "BetterODESolver"
     ps["CardiacODESolver"]["scheme"] = "RK4"
 
     ps["MonodomainSolver"]["Chi"] = 1.26e3      # 1/cm -- Dougherty 2015
@@ -51,13 +115,12 @@ def get_solver(brain: CardiacModel, ode_dt: int = 1) -> SplittingSolver:
 
     df.parameters["form_compiler"]["representation"] = "uflacs"
     df.parameters["form_compiler"]["cpp_optimize"] = True
-    df.parameters["form_compiler"]["optimize"] = True
 
     flags = "-O3 -ffast-math -march=native"
     df.parameters["form_compiler"]["cpp_optimize_flags"] = flags
 
     df.parameters["form_compiler"]["quadrature_degree"] = 1
-    solver = SplittingSolver(brain, ode_timestep=ode_dt, params=ps)
+    solver = SplittingSolver(brain, params=ps)
     return solver
 
 
@@ -96,6 +159,4 @@ def get_points(dimension: int, num_points: int) -> np.ndarray:
         assert False, "Do something clever here"
         pass
 
-
-def get_outpath(dim=1) -> Path:
     return Path("{:d}D_out_cressman".format(dim))
