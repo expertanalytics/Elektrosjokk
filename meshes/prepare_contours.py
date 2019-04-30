@@ -20,11 +20,15 @@ def get_contour(surface, simplify_factor):
     return contour
 
 
-def create_contour_skull(contour):
+def create_contour(contour):
     """Iterate through a contour by juming to the next unseen closes neighbour."""
     right_x = contour[:, 0] > -20       # TODO: parametrise
     lower_y = contour[:, 1] < 40        # TODO: parametrise
     contour = contour[~(right_x & lower_y)]
+
+    # make unique x-values
+    _, unique_x_idx = np.unique(contour[:, 0], return_index=True)
+    contour = contour[unique_x_idx]
 
     # The point in the lower right of the polygon
     start_point = contour[:, 0].max(), contour[:, 1].min()
@@ -92,16 +96,20 @@ if __name__ == "__main__":
     surface_file_dir = Path("surface-files")
 
     surface_dict = {
-        "skull": ("iss", 0.1),
-        "pial": ("pial", 0.25),
+        "skull": ("iss", 0.5),
+        "pial": ("pial", 0.5),
         "white": ("white", 0.5)
     }
 
+    # name = "skull"
+    # name = "pial"
     name = "white"
     surf = Surface(str(surface_file_dir / f"{surface_dict[name][0]}_sclipped.off"))
     contour = get_contour(surf, surface_dict[name][1])
     print(contour.shape)
 
-    sorted_slice = create_contour_skull(contour)
+    sorted_slice = create_contour(contour)
     myfig = plot_polygon(sorted_slice)
-    myfig.savefig("foo.png"t
+    myfig.savefig("foo.png")
+
+    np.save(f"{name}", sorted_slice)
