@@ -6,10 +6,6 @@ from svmtk import Surface
 
 from scipy.spatial import cKDTree
 
-import matplotlib
-from matplotlib.patches import Polygon
-from matplotlib.collections import PatchCollection
-
 
 def get_contour(surface, simplify_factor):
     slice = surface.slice(0, 0, 1, 0)
@@ -96,14 +92,13 @@ if __name__ == "__main__":
     surface_file_dir = Path("surface-files")
 
     surface_dict = {
-        "skull": ("iss", 0.5),
-        "pial": ("pial", 0.5),
-        "white": ("white", 0.5)
+        "skull": ("iss", 0.1),      # 0.1
+        "pial": ("pial", 0.5),      # 0.5
+        "white": ("white", 0.4)     # 0.4
     }
 
-    # name = "skull"
+    name = "skull"
     # name = "pial"
-    name = "white"
     surf = Surface(str(surface_file_dir / f"{surface_dict[name][0]}_sclipped.off"))
     contour = get_contour(surf, surface_dict[name][1])
     print(contour.shape)
