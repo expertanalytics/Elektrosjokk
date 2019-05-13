@@ -44,6 +44,8 @@ class CoupledMonodomainSolver:
 
         if neumann_boundary_condition is None:
             self._neumann_boundary_condition: Dict[int, df.Expression] = dict()
+        else:
+            self._neumann_boundary_condition = neumann_boundary_condition
 
         if not len(conductivity.keys()) == len(conductivity_ratio.keys()):
             raise ValueError("intracellular conductivity and lambda does not have natching keys.")
@@ -117,7 +119,7 @@ class CoupledMonodomainSolver:
         # Boundary contributions
         for interface_tag in self._interface_tags:
             neumann_bc = self._neumann_boundary_condition.get(interface_tag, df.Constant(0))
-            neumann_bc *= v_test*dGamma(interface_tag)
+            neumann_bc = neumann_bc*v_test*dGamma(interface_tag)
             Form += neumann_bc
 
         # Interface conditions

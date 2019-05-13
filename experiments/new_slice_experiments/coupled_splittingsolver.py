@@ -83,8 +83,8 @@ class CoupledSplittingsolver:
             self._brain.interface_function,
             self._brain.interface_tags,
             self._pde_parameters,
-            self._brain.neumann_boundary_conditions,
-            v_prev = self.vs[0]
+            self._brain.neumann_boundary_condition,
+            v_prev=self.vs[0]
         )
         return solver
 

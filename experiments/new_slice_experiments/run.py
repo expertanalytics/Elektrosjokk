@@ -29,6 +29,7 @@ from postspec import (
 
 
 def get_brain() -> CoupledBrainModel:
+    time_constant = df.Constant(0)
     mesh, cell_function, interface_function = get_mesh("meshes", "fine_all")
     cell_tags = CellTags()
     interface_tags = InterfaceTags()
@@ -43,17 +44,27 @@ def get_brain() -> CoupledBrainModel:
     # Include Cm and Chi as well
     Mi_dict = {
         1: df.Constant(16.54),                   # Dlougherty isotropic CSF conductivity 16.54 [mS/cm]
-        2: df.Constant(Mi),        # Dlougherty isotropic GM intracellular conductivity 1.0 [mS/cm]
-        3: df.Constant(Mi),        # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
+        2: df.Constant(Mi/(Chi*Cm)),        # Dlougherty isotropic GM intracellular conductivity 1.0 [mS/cm]
+        3: df.Constant(Mi/(Chi*Cm)),        # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
     }
 
     lambda_dict = {
         1: df.Constant(1),           # I don't know what to do here yet
-        2: df.Constant(lgm),
-        3: df.Constant(lwm),
+        2: df.Constant(lgm/(1 + lgm)),
+        3: df.Constant(lwm/(1 + lwm)),
     }
 
-    time_constant = df.Constant(0)
+    A = 10
+    a = 0.1
+    x0 = -50.08
+    y0 = 58.2704
+    expr_str = "A*exp(-a*(pow(x[0] - x0, 2) + pow(x[1] - y0, 2)))*sin(t*2*pi*1/20)"     # 2 Hz?
+    applied_current = df.Expression(expr_str, degree=1, A=A, a=a, x0=x0, y0=y0, t=time_constant)
+
+    neumann_bc_dict = {
+        7: applied_current
+    }
+
     brain = CoupledBrainModel(
         time=time_constant,
         mesh=mesh,
@@ -63,7 +74,8 @@ def get_brain() -> CoupledBrainModel:
         interface_function=interface_function,
         interface_tags=interface_tags,
         intracellular_conductivity=Mi_dict,
-        other_conductivity=lambda_dict
+        other_conductivity=lambda_dict,
+        neumann_boundary_condition=neumann_bc_dict
     )
     return brain
 
@@ -111,7 +123,7 @@ if __name__ == "__main__":
     solver = get_solver()
     saver = get_saver(brain, "Test")
 
-    for i, solution_struct in enumerate(solver.solve(0, 1, 1e-2)):
+    for i, solution_struct in enumerate(solver.solve(0, 1e1, 0.0025)):
         print(f"{i} -- {solution_struct.vs.vector().norm('l2')}")
         update_dict = {
             "v": solution_struct.vur,
@@ -119,4 +131,3 @@ if __name__ == "__main__":
         }
         saver.update(brain.time, i, update_dict)
     saver.close()
-

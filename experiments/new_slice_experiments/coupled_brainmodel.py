@@ -26,7 +26,7 @@ class CoupledBrainModel:
             interface_tags: InterfaceTags,
             intracellular_conductivity: Dict[int, df.Expression],
             other_conductivity: Dict[int, df.Expression],
-            neumann_boundary_conditions: Dict[int, df.Expression] = None
+            neumann_boundary_condition: Dict[int, df.Expression] = None
     ):
         """
         other conductivity is either the extracellular conductivity or the ratio of
@@ -47,7 +47,7 @@ class CoupledBrainModel:
         self._cell_tags = cell_tags
         self._interface_tags = interface_tags
 
-        self._neumann_boundary_conditions = neumann_boundary_conditions
+        self._neumann_boundary_condition = neumann_boundary_condition
 
     @property
     def cell_model(self):
@@ -86,5 +86,5 @@ class CoupledBrainModel:
         return self._interface_tags
 
     @property
-    def neumann_boundary_conditions(self) -> Optional[Dict[int, df.Expression]]:
-        return self._neumann_boundary_conditions
+    def neumann_boundary_condition(self) -> Optional[Dict[int, df.Expression]]:
+        return self._neumann_boundary_condition
