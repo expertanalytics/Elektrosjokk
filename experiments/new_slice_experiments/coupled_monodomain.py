@@ -31,6 +31,7 @@ class CoupledMonodomainSolver:
         interface_tags: InterfaceTags,
         parameters: CoupledMonodomainParameters,
         neumann_boundary_condition: Dict[int, df.Expression] = None,
+        v_prev: df.Function = None
     ) -> None:
         self._time = time
         self._mesh = mesh
@@ -56,7 +57,11 @@ class CoupledMonodomainSolver:
         self._v_test = df.TestFunction(self._function_space)
 
         self._v = df.Function(self._function_space)
-        self._v_prev = df.Function(self._function_space)
+        if v_prev is None:
+            self._v_prev = df.Function(self._function_space)
+        else:
+            # v_prev is shipped from an odesolver.
+            self._v_prev = v_prev
 
         _cell_tags = set(self._cell_tags)
         _cell_function_values = set(self._cell_function.array())
@@ -131,7 +136,7 @@ class CoupledMonodomainSolver:
 
     def solution_fields(self) -> Tuple[df.Function, df.Function]:
         """Return current and previous solution."""
-        return self._v, self._v_prev
+        return self._v_prev, self._v
 
     def step(self, t0, t1) -> None:
         # Extract interval and thus time-step
@@ -183,18 +188,15 @@ class CoupledMonodomainSolver:
             v_, v = solution_fields
             # do something with the solutions
         """
-        for t0, t1 in time_stepper(t0=t0, t1=t1, dt=dt):
+        for interval in time_stepper(t0=t0, t1=t1, dt=dt):
             # info("Solving on t = (%g, %g)" % (t0, t1))
-            self.step(t0, t1)
+            self.step(interval)
 
             # Yield solutions
-            yield (t0, t1), self.solution_fields()
+            yield interval, self.solution_fields()
 
             # Update wlsewhere???
             self._v_prev.assign(self._v)
-
-            t0 = t1
-            t1 = t0 + dt
 
     def _update_solver(self, dt: float) -> None:
         """Update the lhs matrix if timestep changes."""

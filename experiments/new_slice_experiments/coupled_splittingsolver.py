@@ -27,7 +27,7 @@ class CoupledSplittingsolver:
             *,
             brain: CoupledBrainModel,
             parameters: CoupledSplittingsolverParameters,
-            ode_parameters: CoupledODESolver,
+            ode_parameters: CoupledODESolverParameters,
             pde_parameters: CoupledMonodomainParameters
     ):
         """Create solver from given Cardiac Model and (optional) parameters."""
@@ -43,7 +43,7 @@ class CoupledSplittingsolver:
 
         # Create PDE solver and extract solution fields
         self.pde_solver = self.create_pde_solver()
-        self.v_, self.vur = self.pde_solver.solution_fields()
+        self.v_prev, self.vur = self.pde_solver.solution_fields()
 
         # # Create function assigner for merging v from self.vur into self.vs[0]
         _num_vur_sub_spaces = self.vur.function_space().num_sub_spaces()
@@ -58,11 +58,11 @@ class CoupledSplittingsolver:
     def create_ode_solver(self) -> CoupledODESolver:
         """The idea is to subplacc this and implement another version of this function."""
         solver = CoupledODESolver(
-            self._brain.time,
-            self._brain.mesh,
-            self._brain.cell_model,
-            self._ode_parameters,
-            self._brain.cell_function
+            time=self._brain.time,
+            mesh=self._brain.mesh,
+            cell_model=self._brain.cell_model,
+            cell_function=self._brain.cell_function,
+            parameters=self._ode_parameters,
         )
         return solver
 
@@ -78,7 +78,8 @@ class CoupledSplittingsolver:
             self._brain.interface_function,
             self._brain.interface_tags,
             self._pde_parameters,
-            self._brain.neumann_boundary_conditions
+            self._brain.neumann_boundary_conditions,
+            v_prev = self.vs[0]
         )
         return solver
 
@@ -122,11 +123,11 @@ class CoupledSplittingsolver:
 
         """
         # Create timestepper
-        for _t0, _t1 in time_stepper(t0=t0, t1=t1, dt=dt):
-            self.step(_t0, _t1)       # Takes only one step
+        for interval in time_stepper(t0=t0, t1=t1, dt=dt):
+            self.step(*interval)       # Takes only one step
 
             # Yield solutions
-            yield (_t0, _t1), self.solution_fields()
+            yield interval, self.solution_fields()
 
             # Update previous solution
             self.vs_prev.assign(self.vs)
@@ -183,4 +184,4 @@ class CoupledSplittingsolver:
         self.ode_solver.step(t0, t)
 
     def solution_fields(self) -> Tuple[df.Function, df.Function]:
-        return self.vs, self.vs_prev
+        return self.vs_prev, self.vs

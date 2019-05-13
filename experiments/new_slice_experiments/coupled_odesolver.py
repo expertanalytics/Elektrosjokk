@@ -6,7 +6,6 @@ from extension_modules import load_module
 
 from typing import (
     Tuple,
-    Union,
     Dict,
     NamedTuple,
     Sequence,
@@ -27,7 +26,7 @@ class CoupledODESolver:
             self,
             time: df.Constant,
             mesh: df.Mesh,
-            model: CardiacCellModel,
+            cell_model: CardiacCellModel,
             parameters: CoupledODESolverParameters,
             cell_function: df.MeshFunction = None,
     ) -> None:
@@ -35,7 +34,7 @@ class CoupledODESolver:
         # Store input
         self._mesh = mesh
         self._time = time
-        self._model = model     # FIXME: For initial conditions and num states
+        self._model = cell_model     # FIXME: For initial conditions and num states
 
         # Extract some information from cell model
         self._num_states = self._model.num_states()
@@ -61,7 +60,7 @@ class CoupledODESolver:
                 masked_dofs(dofmap, cell_function.array(), valid_cell_tags) for dofmap in dofmaps
             ]
 
-        model_name = model.__class__.__name__        # Which module to load
+        model_name = cell_model.__class__.__name__        # Which module to load
         self.ode_module = load_module(
             model_name,
             recompile=self._parameters.reload_extension_modules,
@@ -107,32 +106,25 @@ class CoupledODESolver:
 
         """
         # Solve on entire interval if no interval is given.
-        for t0, t1 in time_stepper(t0=t0, t1=t1, dt=dt):
-            self.step(t0, t1)
+        for interval in time_stepper(t0=t0, t1=t1, dt=dt):
+            self.step(*interval)
 
             # Yield solutions
-            yield (t0, t1), self.vs
+            yield interval, self.vs
             self.vs_prev.assign(self.vs)
 
 
 class CoupledSingleCellSolver(CoupledODESolver):
     def __init__(
             self,
-            model: CardiacCellModel,
+            cell_model: CardiacCellModel,
             time: df.Constant,
             reload_ext_modules: bool = False,
             params: df.Parameters = None
     ) -> None:
         """Create solver from given cell model and optional parameters."""
-        assert isinstance(model, CardiacCellModel), \
-            "Expecting model to be a CardiacCellModel, not %r" % model
-        assert (isinstance(time, df.Constant)), \
-            "Expecting time to be a Constant instance, not %r" % time
-        assert isinstance(params, df.Parameters) or params is None, \
-            "Expecting params to be a Parameters (or None), not %r" % params
-
         # Store model
-        self._model = model
+        self.cell_model = cell_model
 
         # Define carefully chosen dummy mesh
         mesh = df.UnitIntervalMesh(1)
@@ -140,8 +132,7 @@ class CoupledSingleCellSolver(CoupledODESolver):
         super().__init__(
             mesh,
             time,
-            model,
-            I_s=model.stimulus,
+            cell_model,
             reload_ext_modules=reload_ext_modules,
             params=params
         )
