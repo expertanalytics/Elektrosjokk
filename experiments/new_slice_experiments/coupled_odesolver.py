@@ -1,6 +1,6 @@
 import dolfin as df
 
-from bbidomain import VectorInt
+from xalode import VectorInt
 
 from extension_modules import load_module
 
@@ -13,7 +13,7 @@ from typing import (
     Iterator,
 )
 
-from utils import (
+from coupled_utils import (
     masked_dofs,
     time_stepper,
     CoupledODESolverParameters,
@@ -64,10 +64,10 @@ class CoupledODESolver:
         model_name = model.__class__.__name__        # Which module to load
         self.ode_module = load_module(
             model_name,
-            recompile=self._parameters.reload_ext_modules,
-            verbose=self._parameters.reload_ext_modules
+            recompile=self._parameters.reload_extension_modules,
+            verbose=self._parameters.reload_extension_modules
         )
-        self.ode_solver = self.ode_module.BetterODESolver(*self._dofs)
+        self.ode_solver = self.ode_module.LatticeODESolver(*self._dofs)
 
     def solution_fields(self) -> Tuple[df.Function, df.Function]:
         """
@@ -115,7 +115,7 @@ class CoupledODESolver:
             self.vs_prev.assign(self.vs)
 
 
-class BetterSingleCellSolver(BetterODESolver):
+class CoupledSingleCellSolver(CoupledODESolver):
     def __init__(
             self,
             model: CardiacCellModel,

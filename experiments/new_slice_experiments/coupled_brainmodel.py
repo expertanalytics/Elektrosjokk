@@ -1,6 +1,6 @@
 import dolfin as df
 
-from xalbrain.cellmnodels import CardiacCellModel
+from xalbrain.cellmodels import CardiacCellModel
 
 from typing import (
     Dict,
@@ -16,6 +16,7 @@ from coupled_utils import (
 class CoupledBrainModel:
     def __init__(
             self,
+            *,
             time: df.Constant,
             mesh: df.Mesh,
             cell_model: CardiacCellModel,
@@ -70,7 +71,7 @@ class CoupledBrainModel:
 
     @property
     def intracellular_conductivity(self) -> Dict[int, df.Expression]:
-        return self.intracellular_conductivity
+        return self._intracellular_conductivity
 
     @property
     def extracellular_conductivity(self) -> Dict[int, df.Expression]:

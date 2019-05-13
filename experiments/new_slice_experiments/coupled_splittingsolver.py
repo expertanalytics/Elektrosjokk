@@ -24,46 +24,50 @@ from coupled_brainmodel import CoupledBrainModel
 class CoupledSplittingsolver:
     def __init__(
             self,
+            *,
             brain: CoupledBrainModel,
             parameters: CoupledSplittingsolverParameters,
+            ode_parameters: CoupledODESolver,
+            pde_parameters: CoupledMonodomainParameters
     ):
         """Create solver from given Cardiac Model and (optional) parameters."""
         self._brain = brain
         self._parameters = parameters
+        self._ode_parameters = ode_parameters
+        self._pde_parameters = pde_parameters
 
         # Create ODE solver and extract solution fields
         self.ode_solver = self.create_ode_solver()
-        self.vs_, self.vs = self.ode_solver.solution_fields()
+        self.vs_prev, self.vs = self.ode_solver.solution_fields()
         self.VS = self.vs.function_space()
 
         # Create PDE solver and extract solution fields
-        self.pde_solver = self._create_pde_solver()
+        self.pde_solver = self.create_pde_solver()
         self.v_, self.vur = self.pde_solver.solution_fields()
 
         # # Create function assigner for merging v from self.vur into self.vs[0]
-        if self.VS.num_sub_space() == 2:
+        _num_vur_sub_spaces = self.vur.function_space().num_sub_spaces()
+        if _num_vur_sub_spaces == 2:
             V = self.vur.function_space().sub(0)
-        elif self.VS.num_sub_space() == 0:
+        elif _num_vur_sub_spaces == 0:
             V = self.vur.function_space()
         else:
-            raise TypeError("Expected function space with 0 or two sub spaces.")
+            raise TypeError(f"Expected function space with 0 or two sub spaces, got {_num_vur_sub_spaces}")
         self.merger = df.FunctionAssigner(self.VS.sub(0), V)
 
     def create_ode_solver(self) -> CoupledODESolver:
         """The idea is to subplacc this and implement another version of this function."""
-        parameters = CoupledODESolverParameters()
         solver = CoupledODESolver(
-            self.brain.time,
-            self.brain.mesh,
-            self.brain.cell_model,
-            parameters,
-            self.brain.cell_function
+            self._brain.time,
+            self._brain.mesh,
+            self._brain.cell_model,
+            self._ode_parameters,
+            self._brain.cell_function
         )
         return solver
 
     def create_pde_solver(self) -> CoupledMonodomainSolver:
         """The idea is to subplacc this and implement another version of this function."""
-        parameters = CoupledMonodomainParameters()
         solver = CoupledMonodomainSolver(
             self._brain.time,
             self._brain.mesh,
@@ -73,7 +77,7 @@ class CoupledSplittingsolver:
             self._brain.cell_tags,
             self._brain.interface_function,
             self._brain.interface_tags,
-            parameters,
+            self._pde_parameters,
             self._brain.neumann_boundary_conditions
         )
         return solver
@@ -84,7 +88,7 @@ class CoupledSplittingsolver:
 
         `solution` holds the solution from the PDEsolver.
         """
-        if self.VS.num_sub_space() == 2:
+        if self.VS.num_sub_spaces() == 2:
             v = self.vur.sub(0)
         else:
             v = self.vur
@@ -118,15 +122,14 @@ class CoupledSplittingsolver:
 
         """
         # Create timestepper
-
-        for t0, t1 in time_stepper(t0=t0, t1=t1, dt=dt):
-            self.step(t0, t1, dt)
+        for _t0, _t1 in time_stepper(t0=t0, t1=t1, dt=dt):
+            self.step(_t0, _t1)       # Takes only one step
 
             # Yield solutions
-            yield (t0, t1), self.solution_fields()
+            yield (_t0, _t1), self.solution_fields()
 
             # Update previous solution
-            self.vs_.assign(self.vs)
+            self.vs_prev.assign(self.vs)
 
     def step(self, t0: float, t1: float) -> None:
         """
@@ -173,8 +176,11 @@ class CoupledSplittingsolver:
         # Assumes that the v part of its vur and the s part of its vs
         # are in the correct state, provides input argument (in this
         # case self.vs_) in its correct state
-        self.merge(self.vs_)    # self.vs_.sub(0) <- self.vur.sub(0)
+        self.merge(self.vs_prev)    # self.vs_.sub(0) <- self.vur.sub(0)
         # Assumes that its vs_ is in the correct state, provides vs in the correct state
 
         # self.ode_solver.step((t0, t))
         self.ode_solver.step(t0, t)
+
+    def solution_fields(self) -> Tuple[df.Function, df.Function]:
+        return self.vs, self.vs_prev

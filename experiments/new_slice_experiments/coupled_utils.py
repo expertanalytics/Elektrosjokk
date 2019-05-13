@@ -10,16 +10,22 @@ from typing import (
     Tuple,
 )
 
-from bbidomain import VectorInt
-
-from collections import namedtuple
+from xalode import VectorInt
 
 
-CellTags = namedtuple("CellTags", ("CSF", "GM", "WM"))
-InterfaceTags = namedtuple("InterfaceTags", ("CSF_GM", "GM_WM", "skull", "CSF", "GM", "WM"))
+class CellTags(NamedTuple):
+    CSF: int = 1
+    GM: int = 2
+    WM: int = 3
 
-cell_tags = CellTags(1, 2, 3)
-interface_tags = InterfaceTags(4, 5, 6, 7, 8, 9)
+
+class InterfaceTags(NamedTuple):
+    CSF_GM: int = 4
+    GM_WM: int = 5
+    skull: int = 6
+    CSF: int = 7
+    GM: int = 8
+    WM: int = 9
 
 
 class CoupledMonodomainParameters(NamedTuple):
@@ -37,25 +43,25 @@ class CoupledSplittingsolverParameters(NamedTuple):
 
 class CoupledODESolverParameters(NamedTuple):
     valid_cell_tags: Sequence[int]
-    timestep: df.Constant = df.constant(1)
-    reload_ext_modules: bool = False
+    timestep: df.Constant = df.Constant(1)
+    reload_extension_modules: bool = False
 
 
-def get_mesh(directory: str, name: str):
+def get_mesh(directory: str, name: str) -> Tuple[df.Mesh, df.MeshFunction, df.MeshFunction]:
     mesh = df.Mesh()
     with df.XDMFFile(f"{directory}/{name}.xdmf") as infile:
         infile.read(mesh)
 
     mvc = df.MeshValueCollection("size_t", mesh, 2)
-    with df.XDMFFile(f"{directory}/{name}_mf.xdmf") as infile:
+    with df.XDMFFile(f"{directory}/{name}_cf.xdmf") as infile:
         infile.read(mvc, "cell_data")
     cell_function = df.MeshFunction("size_t", mesh, mvc)
 
     mvc = df.MeshValueCollection("size_t", mesh, 1)
     with df.XDMFFile(f"{directory}/{name}_ff.xdmf") as infile:
         infile.read(mvc, "facet_data")
-    facet_function = df.MeshFunction("size_t", mesh, mvc)
-    return mesh, cell_function, facet_function
+    interface_function = df.MeshFunction("size_t", mesh, mvc)
+    return mesh, cell_function, interface_function
 
 
 def create_linear_solver(
@@ -83,7 +89,7 @@ def create_linear_solver(
     return solver
 
 
-def masked_dofs(dofmap: df.dofmap, cell_domains_array: np.ndarray, valid_cell_tags: Sequence[int]):
+def masked_dofs(dofmap: df.DofMap, cell_domains_array: np.ndarray, valid_cell_tags: Sequence[int]):
     mask_list: List[int] = []
     for i, ct in enumerate(cell_domains_array):
         cell_dofs = dofmap.cell_dofs(i)
@@ -95,7 +101,7 @@ def masked_dofs(dofmap: df.dofmap, cell_domains_array: np.ndarray, valid_cell_ta
 def time_stepper(*, t0: float, t1: float, dt: float = None) -> Iterator[Tuple[float, float]]:
     if dt is None:
         dt = t1 - t0
-    elif t1 - t0 > dt:
+    elif dt > t1 - t0:
         raise ValueError("dt greater than time interval")
 
     _t0 = t0

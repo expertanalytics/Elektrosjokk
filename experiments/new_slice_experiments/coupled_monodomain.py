@@ -30,7 +30,7 @@ class CoupledMonodomainSolver:
         interface_function: df.MeshFunction,
         interface_tags: InterfaceTags,
         parameters: CoupledMonodomainParameters,
-        neumann_boundary_condition: Dict[int, df.expression] = None,
+        neumann_boundary_condition: Dict[int, df.Expression] = None,
     ) -> None:
         self._time = time
         self._mesh = mesh
@@ -52,15 +52,23 @@ class CoupledMonodomainSolver:
         self._function_space = df.FunctionSpace(mesh, "CG", 1)
 
         # Test and trial and previous functions
-        self._v = df.TrialFunction(self._function_space)
+        self._v_trial = df.TrialFunction(self._function_space)
         self._v_test = df.TestFunction(self._function_space)
+
+        self._v = df.Function(self._function_space)
         self._v_prev = df.Function(self._function_space)
 
-        if not set(self._cell_tags) == set(self._cell_function.array()):
-            raise ValueError("cell tags does not cover all tags in cell function.")
+        _cell_tags = set(self._cell_tags)
+        _cell_function_values = set(self._cell_function.array())
+        if not _cell_tags <= _cell_function_values:
+            msg = f"Cell function does not contain {_cell_tags - _cell_function_values}"
+            raise ValueError(msg)
 
-        if not set(self._interface_tags) == set(self._interface_function.array()):
-            raise ValueError("cell tags does not cover all tags in interface function.")
+        _interface_tags = set(self._interface_tags)
+        _interface_function_values = set(self._interface_function.array())
+        if not _interface_tags <= _interface_function_values:
+            msg = f"interface function does not contain {_interface_tags - _interface_function_values}."
+            raise ValueError(msg)
 
         # Crete integration measures -- Interfaces
         self._dGamma = df.Measure("ds", domain=self._mesh, subdomain_data=self._interface_function)
@@ -89,7 +97,7 @@ class CoupledMonodomainSolver:
         dOmega = self._dOmega
         dGamma = self._dGamma
 
-        v = self._v
+        v = self._v_trial
         v_test = self._v_test
 
         # Set-up variational problem
@@ -116,7 +124,7 @@ class CoupledMonodomainSolver:
         Form += interface_contribution
 
         # rhs   # TODO: This is not necessary
-        Form += df.constant(0)*v_test*dOmega
+        Form += df.Constant(0)*v_test*dOmega
 
         a, L = df.system(Form)
         return a, L
