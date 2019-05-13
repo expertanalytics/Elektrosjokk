@@ -20,6 +20,11 @@ from coupled_monodomain import (
 
 from coupled_brainmodel import CoupledBrainModel
 
+from collections import namedtuple
+
+
+SolutionStruct = namedtuple("SolutionStruct", ("t0", "t1", "vs_prev", "vs", "vur"))
+
 
 class CoupledSplittingsolver:
     def __init__(
@@ -95,7 +100,7 @@ class CoupledSplittingsolver:
             v = self.vur
         self.merger.assign(solution.sub(0), v)
 
-    def solve(self, t0: float, t1: float, dt: float) -> Iterator[Tuple[Tuple[float, float], df.Function]]:
+    def solve(self, t0: float, t1: float, dt: float) -> Iterator[SolutionStruct]:
         """
         Solve the problem given by the model on a time interval with a given time step.
         Return a generator for a tuple of the time step and the solution fields.
@@ -127,7 +132,8 @@ class CoupledSplittingsolver:
             self.step(*interval)       # Takes only one step
 
             # Yield solutions
-            yield interval, self.solution_fields()
+            yield SolutionStruct(*interval, *self.solution_fields())
+            # yield interval, self.solution_fields()
 
             # Update previous solution
             self.vs_prev.assign(self.vs)
@@ -183,5 +189,10 @@ class CoupledSplittingsolver:
         # self.ode_solver.step((t0, t))
         self.ode_solver.step(t0, t)
 
-    def solution_fields(self) -> Tuple[df.Function, df.Function]:
-        return self.vs_prev, self.vs
+    def solution_fields(self) -> Tuple[df.Function, df.Function, df.Function]:
+        """
+        vs is the current solution to the ode.
+        vs_prev is the previous solution to the ode.
+        vur is the solution to the pde.
+        """
+        return self.vs_prev, self.vs, self.vur
