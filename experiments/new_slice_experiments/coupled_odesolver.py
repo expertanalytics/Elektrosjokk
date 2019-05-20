@@ -80,7 +80,14 @@ class CoupledODESolver:
 
     def step(self, t0: float, t1: float) -> None:
         """Take a step using my much better ode solver."""
+        theta = self._parameters.theta
         dt = t1 - t0        # TODO: Is this risky?
+
+        # Set time (propagates to time-dependent variables defined via self.time)
+        t = t0 + theta*(t1 - t0)
+        self._time.assign(t)
+
+        # FIXME: Is there some theta shenanigans I have missed?
         self.ode_solver.solve(self.vs_prev.vector(), t0, t1, dt)
         self.vs.assign(self.vs_prev)
 

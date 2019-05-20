@@ -73,6 +73,7 @@ class CoupledSplittingsolver:
 
     def create_pde_solver(self) -> CoupledMonodomainSolver:
         """The idea is to subplacc this and implement another version of this function."""
+
         solver = CoupledMonodomainSolver(
             self._brain.time,
             self._brain.mesh,
@@ -159,7 +160,6 @@ class CoupledSplittingsolver:
         # in the current state
         # self.ode_solver.step((t0, t))
         self.ode_solver.step(t0, t)
-        # print("ODE time: ", tock - tick)
 
         # self.vs_.assign(self.vs)
 
@@ -167,7 +167,6 @@ class CoupledSplittingsolver:
         # Assumes that its vs_ is in the correct state, gives vur in
         # the current state
         self.pde_solver.step(t0, t1)
-        # print("PDE time: ", tock - tick)
 
         # If first order splitting, we need to ensure that self.vs is
         # up to date, but otherwise we are done.

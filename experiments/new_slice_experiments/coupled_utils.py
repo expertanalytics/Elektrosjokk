@@ -45,6 +45,7 @@ class CoupledODESolverParameters(NamedTuple):
     valid_cell_tags: Sequence[int]
     timestep: df.Constant = df.Constant(1)
     reload_extension_modules: bool = False
+    theta: df.Constant = df.Constant(0.5)
 
 
 def get_mesh(directory: str, name: str) -> Tuple[df.Mesh, df.MeshFunction, df.MeshFunction]:

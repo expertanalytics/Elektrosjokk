@@ -54,10 +54,10 @@ def get_brain() -> CoupledBrainModel:
         3: df.Constant(lwm/(1 + lwm)),
     }
 
-    A = 10
+    A = 50
     a = 0.1
-    x0 = -50.08
-    y0 = 58.2704
+    x0 = -46.4676
+    y0 = 63.478
     expr_str = "A*exp(-a*(pow(x[0] - x0, 2) + pow(x[1] - y0, 2)))*sin(t*2*pi*1/20)"     # 2 Hz?
     applied_current = df.Expression(expr_str, degree=1, A=A, a=a, x0=x0, y0=y0, t=time_constant)
 
@@ -80,8 +80,7 @@ def get_brain() -> CoupledBrainModel:
     return brain
 
 
-def get_solver() -> CoupledSplittingsolver:
-    brain = get_brain()
+def get_solver(brain) -> CoupledSplittingsolver:
     parameters = CoupledSplittingsolverParameters()
     ode_parameters = CoupledODESolverParameters(
         valid_cell_tags=[2],
@@ -108,23 +107,21 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh)
 
-    space_stride = 40
-    field_spec = FieldSpec(
-        save_as=("xdmf", "hdf5"),       # TODO: skip hdf5? -- If I can read from xdmf
-        stride_timestep=space_stride
-    )
-    saver.add_field(Field("v", field_spec))
-    saver.add_field(Field("vs", field_spec))
+    field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=40)
+    saver.add_field(Field("v", field_spec_checkpoint))
+
+    field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=40*1000)
+    saver.add_field(Field("vs", field_spec_checkpoint))
     return saver
 
 
 if __name__ == "__main__":
     brain = get_brain()
-    solver = get_solver()
+    solver = get_solver(brain)
     saver = get_saver(brain, "Test")
 
-    for i, solution_struct in enumerate(solver.solve(0, 1e1, 0.0025)):
-        print(f"{i} -- {solution_struct.vs.vector().norm('l2')}")
+    for i, solution_struct in enumerate(solver.solve(0, 1e3, 0.025)):
+        print(f"{i} -- {brain.time(0)} -- {solution_struct.vur.vector().norm('l2')}")
         update_dict = {
             "v": solution_struct.vur,
             "vs": solution_struct.vs,
