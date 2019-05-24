@@ -98,8 +98,8 @@ class CoupledBidomainSolver:
         if solver_type == "direct":
             solver = df.LUSolver(self._lhs_matrix)
         elif solver_type == "iterative":
-            alg = self.parameters.krylov_method
-            prec = self.parameters.krylov_preconditioner
+            alg = self._parameters.krylov_method
+            prec = self._parameters.krylov_preconditioner
 
             solver = df.PETScKrylovSolver(alg, prec)
             solver.set_operator(self._lhs_matrix)
