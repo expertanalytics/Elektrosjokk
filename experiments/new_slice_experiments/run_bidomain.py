@@ -6,7 +6,7 @@ from typing import Union
 from postfields import Field
 from post import Saver
 from coupled_brainmodel import CoupledBrainModel
-from coupled_splittingsolver import CoupledSplittingsolver
+from coupled_splittingsolver import BidomainSplittingSolver
 
 from xalbrain.cellmodels import (
     Cressman,
@@ -19,7 +19,7 @@ from coupled_utils import (
     InterfaceTags,
     CoupledSplittingsolverParameters,
     CoupledODESolverParameters,
-    CoupledMonodomainParameters,
+    CoupledBidomainParameters,
 )
 
 from postspec import (
@@ -80,14 +80,15 @@ def get_brain() -> CoupledBrainModel:
     return brain
 
 
-def get_solver(brain) -> CoupledSplittingsolver:
+def get_solver(brain) -> BidomainSplittingSolver:
     parameters = CoupledSplittingsolverParameters()
     ode_parameters = CoupledODESolverParameters(
         valid_cell_tags=[2],
         reload_extension_modules=False
     )
-    pde_parameters = CoupledMonodomainParameters()
-    solver = CoupledSplittingsolver(
+    # pde_parameters = CoupledBidomainParameters(linear_solver_type="iterative")
+    pde_parameters = CoupledBidomainParameters()
+    solver = BidomainSplittingSolver(
         brain=brain,
         parameters=parameters,
         ode_parameters=ode_parameters,

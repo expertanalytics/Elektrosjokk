@@ -4,7 +4,8 @@ from coupled_utils import (
     time_stepper,
     CoupledSplittingsolverParameters,
     CoupledMonodomainParameters,
-    CoupledODESolverParameters
+    CoupledODESolverParameters,
+    CoupledBidomainParameters,
 )
 
 from typing import (
@@ -12,11 +13,18 @@ from typing import (
     Tuple,
 )
 
+from abc import (
+    ABC,
+    abstractmethod
+)
+
 from coupled_odesolver import CoupledODESolver
 
 from coupled_monodomain import (
     CoupledMonodomainSolver
 )
+
+from coupled_bidomain import CoupledBidomainSolver
 
 from coupled_brainmodel import CoupledBrainModel
 
@@ -26,20 +34,16 @@ from collections import namedtuple
 SolutionStruct = namedtuple("SolutionStruct", ("t0", "t1", "vs_prev", "vs", "vur"))
 
 
-class CoupledSplittingsolver:
+class CoupledSplittingSolver(ABC):
     def __init__(
-            self,
-            *,
-            brain: CoupledBrainModel,
-            parameters: CoupledSplittingsolverParameters,
-            ode_parameters: CoupledODESolverParameters,
-            pde_parameters: CoupledMonodomainParameters
-    ):
+        self,
+        *,
+        brain: CoupledBrainModel,
+        parameters: CoupledSplittingsolverParameters,
+    ) -> None:
         """Create solver from given Cardiac Model and (optional) parameters."""
         self._brain = brain
         self._parameters = parameters
-        self._ode_parameters = ode_parameters
-        self._pde_parameters = pde_parameters
 
         # Create ODE solver and extract solution fields
         self.ode_solver = self.create_ode_solver()
@@ -51,43 +55,19 @@ class CoupledSplittingsolver:
         self.v_prev, self.vur = self.pde_solver.solution_fields()
 
         # # Create function assigner for merging v from self.vur into self.vs[0]
-        _num_vur_sub_spaces = self.vur.function_space().num_sub_spaces()
-        if _num_vur_sub_spaces == 2:
+        if self.vur.function_space().num_sub_spaces() > 1:
             V = self.vur.function_space().sub(0)
-        elif _num_vur_sub_spaces == 0:
-            V = self.vur.function_space()
         else:
-            raise TypeError(f"Expected function space with 0 or two sub spaces, got {_num_vur_sub_spaces}")
+            V = self.vur.function_space()
         self.merger = df.FunctionAssigner(self.VS.sub(0), V)
 
-    def create_ode_solver(self) -> CoupledODESolver:
-        """The idea is to subplacc this and implement another version of this function."""
-        solver = CoupledODESolver(
-            time=self._brain.time,
-            mesh=self._brain.mesh,
-            cell_model=self._brain.cell_model,
-            cell_function=self._brain.cell_function,
-            parameters=self._ode_parameters,
-        )
-        return solver
+    @abstractmethod
+    def create_ode_solver(self):
+        pass
 
-    def create_pde_solver(self) -> CoupledMonodomainSolver:
-        """The idea is to subplacc this and implement another version of this function."""
-
-        solver = CoupledMonodomainSolver(
-            self._brain.time,
-            self._brain.mesh,
-            self._brain.intracellular_conductivity,
-            self._brain.extracellular_conductivity,
-            self._brain.cell_function,
-            self._brain.cell_tags,
-            self._brain.interface_function,
-            self._brain.interface_tags,
-            self._pde_parameters,
-            self._brain.neumann_boundary_condition,
-            v_prev=self.vs[0]
-        )
-        return solver
+    @abstractmethod
+    def create_pde_solver(self):
+        pass
 
     def merge(self, solution: df.Function) -> None:
         """
@@ -95,7 +75,7 @@ class CoupledSplittingsolver:
 
         `solution` holds the solution from the PDEsolver.
         """
-        if self.VS.num_sub_spaces() == 2:
+        if self.VS.num_sub_spaces() > 1:
             v = self.vur.sub(0)
         else:
             v = self.vur
@@ -195,3 +175,89 @@ class CoupledSplittingsolver:
         vur is the solution to the pde.
         """
         return self.vs_prev, self.vs, self.vur
+
+
+class MonodomainSplittingSolver(CoupledSplittingSolver):
+    def __init__(
+        self,
+        *,
+        brain: CoupledBrainModel,
+        parameters: CoupledSplittingsolverParameters,
+        ode_parameters: CoupledODESolverParameters,
+        pde_parameters: CoupledMonodomainParameters
+    ) -> None:
+        self._pde_parameters = pde_parameters
+        self._ode_parameters = ode_parameters
+        super().__init__(brain=brain, parameters=parameters)
+
+    def create_ode_solver(self) -> CoupledODESolver:
+        """The idea is to subplacc this and implement another version of this function."""
+        solver = CoupledODESolver(
+            time=self._brain.time,
+            mesh=self._brain.mesh,
+            cell_model=self._brain.cell_model,
+            cell_function=self._brain.cell_function,
+            parameters=self._ode_parameters,
+        )
+        return solver
+
+    def create_pde_solver(self) -> CoupledMonodomainSolver:
+        """The idea is to subplacc this and implement another version of this function."""
+
+        solver = CoupledMonodomainSolver(
+            self._brain.time,
+            self._brain.mesh,
+            self._brain.intracellular_conductivity,
+            self._brain.extracellular_conductivity,
+            self._brain.cell_function,
+            self._brain.cell_tags,
+            self._brain.interface_function,
+            self._brain.interface_tags,
+            self._pde_parameters,
+            self._brain.neumann_boundary_condition,
+            v_prev=self.vs[0]
+        )
+        return solver
+
+
+class BidomainSplittingSolver(CoupledSplittingSolver):
+    def __init__(
+        self,
+        *,
+        brain: CoupledBrainModel,
+        parameters: CoupledSplittingsolverParameters,
+        ode_parameters: CoupledODESolverParameters,
+        pde_parameters: CoupledBidomainParameters
+    ) -> None:
+        self._pde_parameters = pde_parameters
+        self._ode_parameters = ode_parameters
+        super().__init__(brain=brain, parameters=parameters)
+
+    def create_ode_solver(self) -> CoupledODESolver:
+        """The idea is to subplacc this and implement another version of this function."""
+        solver = CoupledODESolver(
+            time=self._brain.time,
+            mesh=self._brain.mesh,
+            cell_model=self._brain.cell_model,
+            cell_function=self._brain.cell_function,
+            parameters=self._ode_parameters,
+        )
+        return solver
+
+    def create_pde_solver(self) -> CoupledBidomainSolver:
+        """The idea is to subplacc this and implement another version of this function."""
+
+        solver = CoupledBidomainSolver(
+            self._brain.time,
+            self._brain.mesh,
+            self._brain.intracellular_conductivity,
+            self._brain.extracellular_conductivity,
+            self._brain.cell_function,
+            self._brain.cell_tags,
+            self._brain.interface_function,
+            self._brain.interface_tags,
+            self._pde_parameters,
+            self._brain.neumann_boundary_condition,
+            v_prev=self.vs[0]
+        )
+        return solver

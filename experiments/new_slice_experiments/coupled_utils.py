@@ -37,6 +37,15 @@ class CoupledMonodomainParameters(NamedTuple):
     krylov_preconditioner: str = "petsc_amg"
 
 
+class CoupledBidomainParameters(NamedTuple):
+    timestep: df.Constant = df.Constant(1.0)
+    theta: df.Constant = df.Constant(0.5)
+    linear_solver_type: str = "direct"
+    lu_type: str = "default"
+    krylov_method: str = "cg"   # gmres?
+    krylov_preconditioner: str = "petsc_amg"
+
+
 class CoupledSplittingsolverParameters(NamedTuple):
     theta: df.Constant = df.Constant(0.5)
 

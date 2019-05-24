@@ -1,7 +1,6 @@
 import dolfin as df
 
 from typing import (
-    Union,
     Dict,
     Any,
     Tuple,
@@ -47,7 +46,7 @@ class CoupledMonodomainSolver:
         else:
             self._neumann_boundary_condition = neumann_boundary_condition
 
-        if not len(conductivity.keys()) == len(conductivity_ratio.keys()):
+        if not set(conductivity.keys()) == set(conductivity_ratio.keys()):
             raise ValueError("intracellular conductivity and lambda does not have natching keys.")
         self._lambda = conductivity_ratio
 
@@ -202,7 +201,7 @@ class CoupledMonodomainSolver:
 
     def _update_solver(self, dt: float) -> None:
         """Update the lhs matrix if timestep changes."""
-        if (abs(dt - float(self._timestep)) < 1.e-12):
+        if (abs(dt - float(self._timestep)) < 1e-12):
             return
         self._timestep.assign(df.Constant(dt))
 
