@@ -6,6 +6,7 @@ from typing import (
     Tuple,
     Any,
     Iterator,
+    Union,
 )
 
 from coupled_utils import (
@@ -30,21 +31,44 @@ class CoupledBidomainSolver:
         parameters: CoupledBidomainParameters,
         neumann_boundary_condition: Dict[int, df.Expression] = None,
         v_prev: df.Function = None,
+        surface_to_volume_factor: Union[float, df.Constant] = None,
+        membrane_capacitance: Union[float, df.Constant] = None
     ) -> None:
         self._time = time
         self._mesh = mesh
+        self._parameters = parameters
+
+        if surface_to_volume_factor is None:
+            surface_to_volume_factor = df.constant(1)
+
+        if membrane_capacitance is None:
+            membrane_capacitance = df.constant(1)
+
+        # Set Chi*Cm
+        self._chi_cm = df.Constant(surface_to_volume_factor)*df.Constant(membrane_capacitance)
 
         if not set(intracellular_conductivity.keys()) == set(extracellular_conductivity.keys()):
             raise ValueError("intracellular conductivity and lambda does not have natching keys.")
+        if not set(cell_tags) == set(intracellular_conductivity.keys()):
+            raise ValueError("Cell tags does not match conductivity keys")
         self._intracellular_conductivity = intracellular_conductivity
         self._extracellular_conductivity = extracellular_conductivity
 
-        # TODO: check matching keys and tags etc.
-        self._cell_function = cell_function
+        # Check cell tags
+        _cell_function_tags = set(cell_function.array())
+        if set(cell_tags) != _cell_function_tags:       # If not equal
+            msg = "Mismatching cell tags. Expected {}, got {}"
+            raise ValueError(msg.format(set(cell_tags), _cell_function_tags))
         self._cell_tags = cell_tags
+        self._cell_function = cell_function
+
+        # Check interface tags
+        _interface_function_tags = set(interface_function.array())
+        if not set(interface_tags) <= _interface_function_tags:     # if not subset of
+            msg = "Mismatching interface tags. Expected {}, got {}"
+            raise ValueError(msg.format(set(interface_tags), _interface_function_tags))
         self._interface_function = interface_function
         self._interface_tags = interface_tags
-        self._parameters = parameters
 
         # Set up function spaces
         self._transmembrane_function_space = df.FunctionSpace(self._mesh, "CG", 1)
@@ -104,12 +128,22 @@ class CoupledBidomainSolver:
             solver = df.PETScKrylovSolver(alg, prec)
             solver.set_operator(self._lhs_matrix)
             solver.parameters["nonzero_initial_guess"] = True
+
+            A = df.as_backend_type(self._lhs_matrix)
+            A.set_nullspace(self._nullspace())
         else:
             msg = "Unknown solver type. Got {}, expected 'iterative' or 'direct'".format(solver_type)
             raise ValueError(msg)
         return solver
 
-    def variational_forms(self, kn: df.Constant) -> Tuple[Any, Any]:
+    def _nullspace(self) -> df.VectorSpaceBasis:
+        null_vector = df.Vector(self._vur.vector())
+        self._VUR.sub(1).dofmap().set(null_vector, 1.0)
+        null_vector *= 1.0/null_vector.norm("l2")
+        nullspace_basis = df.VectorSpaceBasis([null_vector])
+        return nullspace_basis
+
+    def variational_forms(self, dt: df.Constant) -> Tuple[Any, Any]:
         """Create the variational forms corresponding to the given
         discretization of the given system of equations.
 
@@ -134,7 +168,8 @@ class CoupledBidomainSolver:
             v, u = df.TrialFunctions(self._VUR)
             v_test, u_test = df.TestFunctions(self._VUR)
 
-        Dt_v = (v - self._v_prev)/kn
+        Dt_v = (v - self._v_prev)/dt
+        # Dt_v *= self._chi_cm                # Chi is surface to volume aration. Cm is capacitance
         v_mid = theta*v + (1.0 - theta)*self._v_prev
 
         # Set-up measure and rhs from stimulus
@@ -143,7 +178,7 @@ class CoupledBidomainSolver:
 
         # Loop over all domains
         G = Dt_v*v_test*dOmega()
-        for key in set(self._cell_tags):        # TODO: do I need set here? cell_tags is a tuple. But is a guard against dicts
+        for key in set(self._cell_tags):
             G += df.inner(Mi[key]*df.grad(v_mid), df.grad(v_test))*dOmega(key)
             G += df.inner(Mi[key]*df.grad(u), df.grad(v_test))*dOmega(key)
             G += df.inner(Mi[key]*df.grad(v_mid), df.grad(u_test))*dOmega(key)
@@ -155,7 +190,6 @@ class CoupledBidomainSolver:
 
         for key in set(self._interface_tags):
             # Default to 0 if not defined for tag
-            # I do not I should apply `chi` here.
             G += self._neumann_bc.get(key, df.Constant(0))*u_test*dGamma(key)
 
         a, L = df.system(G)
@@ -236,13 +270,6 @@ class CoupledBidomainSolver:
 
         rhs_norm = self._rhs_vector[self._extracellular_dofs].sum()/self._extracellular_dofs.size
         self._rhs_vector[self._extracellular_dofs] -= rhs_norm
-
-        # rhs_norm = self._rhs_vector.get_local()[extracellular_indices].sum()
-        # rhs_norm /= extracellular_indices.size
-
-        # TODO: What is this?
-        # rhs_norm = self._rhs_vector.array()[extracellular_indices].sum()/extracellular_indices.size
-        # self._rhs_vector.get_local()[extracellular_indices] -= rhs_norm
 
         # Solve problem
         self._linear_solver.solve(

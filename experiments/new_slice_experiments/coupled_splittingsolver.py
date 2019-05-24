@@ -258,6 +258,8 @@ class BidomainSplittingSolver(CoupledSplittingSolver):
             self._brain.interface_tags,
             self._pde_parameters,
             self._brain.neumann_boundary_condition,
-            v_prev=self.vs[0]
+            v_prev=self.vs[0],
+            surface_to_volume_factor=self._brain.surface_to_volume_factor,
+            membrane_capacitance=self._brain.membrane_capacitance
         )
         return solver

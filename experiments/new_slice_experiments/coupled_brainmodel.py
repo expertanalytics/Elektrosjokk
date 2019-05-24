@@ -5,6 +5,7 @@ from xalbrain.cellmodels import CardiacCellModel
 from typing import (
     Dict,
     Optional,
+    Union,
 )
 
 from coupled_utils import (
@@ -15,18 +16,20 @@ from coupled_utils import (
 
 class CoupledBrainModel:
     def __init__(
-            self,
-            *,
-            time: df.Constant,
-            mesh: df.Mesh,
-            cell_model: CardiacCellModel,
-            cell_function: df.MeshFunction,
-            cell_tags: CellTags,
-            interface_function: df.MeshFunction,
-            interface_tags: InterfaceTags,
-            intracellular_conductivity: Dict[int, df.Expression],
-            other_conductivity: Dict[int, df.Expression],
-            neumann_boundary_condition: Dict[int, df.Expression] = None
+        self,
+        *,
+        time: df.Constant,
+        mesh: df.Mesh,
+        cell_model: CardiacCellModel,
+        cell_function: df.MeshFunction,
+        cell_tags: CellTags,
+        interface_function: df.MeshFunction,
+        interface_tags: InterfaceTags,
+        intracellular_conductivity: Dict[int, df.Expression],
+        other_conductivity: Dict[int, df.Expression],
+        neumann_boundary_condition: Dict[int, df.Expression] = None,
+        surface_to_volume_factor: Union[float, df.Constant] = None,
+        membrane_capacitance: Union[float, df.Constant] = None
     ):
         """
         other conductivity is either the extracellular conductivity or the ratio of
@@ -48,6 +51,18 @@ class CoupledBrainModel:
         self._interface_tags = interface_tags
 
         self._neumann_boundary_condition = neumann_boundary_condition
+        self._surface_to_volume_factor = df.Constant(surface_to_volume_factor)
+        self._membrane_capacitance = df.Constant(membrane_capacitance)
+
+        if surface_to_volume_factor is None:
+            self._surface_to_volume_factor = df.constant(1)
+        else:
+            self._surface_to_volume_factor = df.Constant(surface_to_volume_factor)
+
+        if membrane_capacitance is None:
+            self._membrane_capacitance = df.constant(1)
+        else:
+            self._membrane_capacitance = df.Constant(membrane_capacitance)
 
     @property
     def cell_model(self):
@@ -88,3 +103,11 @@ class CoupledBrainModel:
     @property
     def neumann_boundary_condition(self) -> Optional[Dict[int, df.Expression]]:
         return self._neumann_boundary_condition
+
+    @property
+    def surface_to_volume_factor(self) -> df.Constant:
+        return self._surface_to_volume_factor
+
+    @property
+    def membrane_capacitance(self) -> df.Constant:
+        return self._membrane_capacitance

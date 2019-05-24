@@ -42,7 +42,7 @@ class CoupledBidomainParameters(NamedTuple):
     theta: df.Constant = df.Constant(0.5)
     linear_solver_type: str = "direct"
     lu_type: str = "default"
-    krylov_method: str = "cg"   # gmres?
+    krylov_method: str = "gmres"   # CG fails
     krylov_preconditioner: str = "petsc_amg"
 
 

@@ -28,7 +28,7 @@ class CoupledODESolver:
             mesh: df.Mesh,
             cell_model: CardiacCellModel,
             parameters: CoupledODESolverParameters,
-            cell_function: df.MeshFunction = None,
+            cell_function: df.MeshFunction,
     ) -> None:
         """Initialise parameters. NB! Keep I_s for compatibility"""
         # Store input
@@ -40,6 +40,10 @@ class CoupledODESolver:
         self._num_states = self._model.num_states()
 
         self._parameters = parameters
+        _cell_function_tags = set(cell_function.array())
+        if not set(self._parameters.valid_cell_tags) <= _cell_function_tags:
+            msg = "Valid cell tag not found in cell function. Expected {}, for {}."
+            raise ValueError(msg.format(set(self._parameters.valid_cell_tags), _cell_function_tags))
         valid_cell_tags = self._parameters.valid_cell_tags
 
         # Create (vector) function space for potential + states
