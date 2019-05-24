@@ -72,6 +72,9 @@ class CoupledBidomainSolver:
             self._v_prev = v_prev
         self._vur = df.Function(self._VUR, name="vur")        # TODO: Give sensible name
 
+        # For normlising rhs_vector. TODO: Unsure about this. Check the nullspace from cbcbeat
+        self._extracellular_dofs = np.asarray(self._VUR.sub(1).dofmap().dofs())
+
         # Mark first timestep
         self._timestep: df.Constant = None
 
@@ -231,15 +234,15 @@ class CoupledBidomainSolver:
         # Assemble right-hand-side
         df.assemble(self._rhs, tensor=self._rhs_vector)
 
-        print("FIXME: move extracellular indices somewhere else -- l 646 bidomainsolver")
-        # TODO: This smells of dofmapping
-        extracellular_indices = np.arange(0, self._rhs_vector.size(), 2)
-        rhs_norm = self._rhs_vector.get_local()[extracellular_indices].sum()
-        rhs_norm /= extracellular_indices.size
+        rhs_norm = self._rhs_vector[self._extracellular_dofs].sum()/self._extracellular_dofs.size
+        self._rhs_vector[self._extracellular_dofs] -= rhs_norm
+
+        # rhs_norm = self._rhs_vector.get_local()[extracellular_indices].sum()
+        # rhs_norm /= extracellular_indices.size
 
         # TODO: What is this?
         # rhs_norm = self._rhs_vector.array()[extracellular_indices].sum()/extracellular_indices.size
-        self._rhs_vector.get_local()[extracellular_indices] -= rhs_norm
+        # self._rhs_vector.get_local()[extracellular_indices] -= rhs_norm
 
         # Solve problem
         self._linear_solver.solve(

@@ -110,6 +110,7 @@ def get_saver(
 
     field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=40)
     saver.add_field(Field("v", field_spec_checkpoint))
+    saver.add_field(Field("u", field_spec_checkpoint))
 
     field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=40*1000)
     saver.add_field(Field("vs", field_spec_checkpoint))
@@ -121,10 +122,12 @@ if __name__ == "__main__":
     solver = get_solver(brain)
     saver = get_saver(brain, "Test")
 
-    for i, solution_struct in enumerate(solver.solve(0, 1e3, 0.025)):
+    for i, solution_struct in enumerate(solver.solve(0, 1e1, 0.025)):
         print(f"{i} -- {brain.time(0)} -- {solution_struct.vur.vector().norm('l2')}")
+        v, u, *_ = solution_struct.vur.split(deepcopy=True)
         update_dict = {
-            "v": solution_struct.vur,
+            "v": v,
+            "u": u,
             "vs": solution_struct.vs,
         }
         saver.update(brain.time, i, update_dict)
