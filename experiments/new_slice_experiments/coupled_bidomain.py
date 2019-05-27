@@ -169,7 +169,7 @@ class CoupledBidomainSolver:
             v_test, u_test = df.TestFunctions(self._VUR)
 
         Dt_v = (v - self._v_prev)/dt
-        # Dt_v *= self._chi_cm                # Chi is surface to volume aration. Cm is capacitance
+        Dt_v *= self._chi_cm                # Chi is surface to volume aration. Cm is capacitance
         v_mid = theta*v + (1.0 - theta)*self._v_prev
 
         # Set-up measure and rhs from stimulus

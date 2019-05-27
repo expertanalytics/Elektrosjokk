@@ -41,7 +41,7 @@ def get_brain() -> CoupledBrainModel:
     Cm = 1.0          # muF/cm^2 -- Dougherty 2015
 
     Mi_dict = {
-        3: df.Constant(1),        # Set to zero?
+        3: df.Constant(1e-12),        # Set to zero?
         2: df.Constant(1),        # Dlougherty isotropic GM intracellular conductivity 1.0 [mS/cm]
         1: df.Constant(1),        # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
     }
