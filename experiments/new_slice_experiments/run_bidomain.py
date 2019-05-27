@@ -31,22 +31,25 @@ from postspec import (
 def get_brain() -> CoupledBrainModel:
     time_constant = df.Constant(0)
     mesh, cell_function, interface_function = get_mesh("new_meshes", "skullgmwm")
-    cell_tags = CellTags(CSF=11, GM=13, WM=15)
-    interface_tags = InterfaceTags(skull=1, CSF_GM=2, GM_WM=3, CSF=4, GM=6, WM=8)
+    cell_tags = CellTags(CSF=3, GM=2, WM=1)
+    interface_tags = InterfaceTags(skull=3, CSF_GM=2, GM_WM=1, CSF=None, GM=None, WM=None)
+    # mesh, cell_function, interface_function = get_mesh("meshes", "fine_all")
+    # cell_tags = CellTags()
+    # interface_tags = InterfaceTags()
 
     Chi = 1.26e3      # 1/cm -- Dougherty 2015
     Cm = 1.0          # muF/cm^2 -- Dougherty 2015
 
     Mi_dict = {
-        11: df.Constant(1),        # Set to zero?
-        13: df.Constant(1),        # Dlougherty isotropic GM intracellular conductivity 1.0 [mS/cm]
-        15: df.Constant(1),        # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
+        3: df.Constant(1),        # Set to zero?
+        2: df.Constant(1),        # Dlougherty isotropic GM intracellular conductivity 1.0 [mS/cm]
+        1: df.Constant(1),        # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
     }
 
     Me_dict = {
-        11: df.Constant(16.54),     # Dougherty isotropic CSF conductivity 16.54 [mS/cm]
-        13: df.Constant(2.76),      # Dougherty isotropic GM extracellular conductivity 2.76 [mS/cm]
-        15: df.Constant(1.26),      # Dougherty isotropic "M extracellular conductivity 1.26 [mS/cm]
+        3: df.Constant(16.54),     # Dougherty isotropic CSF conductivity 16.54 [mS/cm]
+        2: df.Constant(2.76),      # Dougherty isotropic GM extracellular conductivity 2.76 [mS/cm]
+        1: df.Constant(1.26),      # Dougherty isotropic "M extracellular conductivity 1.26 [mS/cm]
     }
 
     A = 50
@@ -57,7 +60,7 @@ def get_brain() -> CoupledBrainModel:
     applied_current = df.Expression(expr_str, degree=1, A=A, a=a, x0=x0, y0=y0, t=time_constant)
 
     neumann_bc_dict = {
-        1: applied_current      # Applied to skull
+        3: applied_current      # Applied to skull
     }
 
     brain = CoupledBrainModel(
@@ -80,7 +83,7 @@ def get_brain() -> CoupledBrainModel:
 def get_solver(brain) -> BidomainSplittingSolver:
     parameters = CoupledSplittingsolverParameters()
     ode_parameters = CoupledODESolverParameters(
-        valid_cell_tags=(13,),
+        valid_cell_tags=(2,),
         reload_extension_modules=False
     )
     pde_parameters = CoupledBidomainParameters(linear_solver_type="iterative")

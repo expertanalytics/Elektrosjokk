@@ -1,5 +1,4 @@
-"""
-Write an xdmf file for use in FEniCS.
+""" Write an xdmf file for use in FEniCS.
 
 Thanks to J. S. Dokken for help with this script.
 
@@ -29,11 +28,11 @@ def unify_facet_tags(facet_tags, unify):
     facet_tags[facet_tags == 5] = 4
 
 
-def parse_gmsh_mesh(mesh: meshio.Mesh, unify=False) -> MeshData:
+def parse_gmsh_mesh(mesh: meshio.Mesh, unify=False, dim=2) -> MeshData:
     """Extract data structures from meshio. This is gmsh specific."""
     if unify:
         print("Unifying tags according to rule.")
-    _points = mesh.points
+    _points = mesh.points[:, :dim]
     _cells = {"triangle": mesh.cells["triangle"]}
     try:
         _lines = {"line": mesh.cells["line"]}
@@ -41,15 +40,14 @@ def parse_gmsh_mesh(mesh: meshio.Mesh, unify=False) -> MeshData:
         _lines = None
     try:
         if unify:
-            unify_cell_tags(mesh.cell_data["triangle"]["gmsh:geometrical"], unify)
-        _cell_data = {"triangle": {"cell_data": mesh.cell_data["triangle"]["gmsh:geometrical"]}}
-        print(_cell_data)
+            unify_cell_tags(mesh.cell_data["triangle"]["gmsh:physical"], unify)
+        _cell_data = {"triangle": {"cell_data": mesh.cell_data["triangle"]["gmsh:physical"]}}
     except KeyError:
         _cell_data = None
     try:
         if unify:
-            unify_facet_tags(mesh.cell_data["line"]["gmsh:geometrical"], unify)
-        _facet_data = {"line": {"facet_data": mesh.cell_data["line"]["gmsh:geometrical"]}}
+            unify_facet_tags(mesh.cell_data["line"]["gmsh:physical"], unify)
+        _facet_data = {"line": {"facet_data": mesh.cell_data["line"]["gmsh:physical"]}}
     except:
         _facet_data = None
     return MeshData(_points, _cells, _lines, _cell_data, _facet_data)
@@ -92,7 +90,7 @@ def test_fenics_read(directory, name):
 if __name__ == "__main__":
     input_name = "new_slice_experiments/new_meshes/skullgmwm.msh"
     mesh = meshio.read(input_name)
-    mesh_data = parse_gmsh_mesh(mesh, unify=True)
+    mesh_data = parse_gmsh_mesh(mesh, unify=False)
 
     output_name = "new_slice_experiments/new_meshes/skullgmwm"
     write_mesh(mesh_data.points, mesh_data.cells, output_name)

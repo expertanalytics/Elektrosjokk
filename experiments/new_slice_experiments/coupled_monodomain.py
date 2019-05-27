@@ -71,7 +71,7 @@ class CoupledMonodomainSolver:
             raise ValueError(msg)
 
         _interface_tags = set(self._interface_tags)
-        _interface_function_values = set(self._interface_function.array())
+        _interface_function_values = {*set(self._interface_function.array()), None}
         if not _interface_tags <= _interface_function_values:
             msg = f"interface function does not contain {_interface_tags - _interface_function_values}."
             raise ValueError(msg)

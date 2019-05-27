@@ -47,8 +47,8 @@ class CoupledBidomainSolver:
         # Set Chi*Cm
         self._chi_cm = df.Constant(surface_to_volume_factor)*df.Constant(membrane_capacitance)
 
-        if not set(intracellular_conductivity.keys()) == set(extracellular_conductivity.keys()):
-            raise ValueError("intracellular conductivity and lambda does not have natching keys.")
+        if not set(intracellular_conductivity.keys()) == {*tuple(extracellular_conductivity.keys())}:
+            raise ValueError("intracellular conductivity and lambda does not havemnatching keys.")
         if not set(cell_tags) == set(intracellular_conductivity.keys()):
             raise ValueError("Cell tags does not match conductivity keys")
         self._intracellular_conductivity = intracellular_conductivity
@@ -63,7 +63,7 @@ class CoupledBidomainSolver:
         self._cell_function = cell_function
 
         # Check interface tags
-        _interface_function_tags = set(interface_function.array())
+        _interface_function_tags = {*set(interface_function.array()), None}
         if not set(interface_tags) <= _interface_function_tags:     # if not subset of
             msg = "Mismatching interface tags. Expected {}, got {}"
             raise ValueError(msg.format(set(interface_tags), _interface_function_tags))
