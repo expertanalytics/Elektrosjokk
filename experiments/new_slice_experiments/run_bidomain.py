@@ -17,7 +17,7 @@ from coupled_utils import (
     get_mesh,
     CellTags,
     InterfaceTags,
-    CoupledSplittingsolverParameters,
+    CoupledSplittingSolverParameters,
     CoupledODESolverParameters,
     CoupledBidomainParameters,
 )
@@ -86,7 +86,7 @@ def get_solver(brain) -> BidomainSplittingSolver:
         valid_cell_tags=(2,),
         reload_extension_modules=False
     )
-    pde_parameters = CoupledBidomainParameters(linear_solver_type="iterative")
+    pde_parameters = CoupledBidomainParameters(linear_solver_type="direct")
     # pde_parameters = CoupledBidomainParameters()
     solver = BidomainSplittingSolver(
         brain=brain,

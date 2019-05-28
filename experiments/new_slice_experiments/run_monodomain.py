@@ -6,7 +6,7 @@ from typing import Union
 from postfields import Field
 from post import Saver
 from coupled_brainmodel import CoupledBrainModel
-from coupled_splittingsolver import CoupledSplittingsolver
+from coupled_splittingsolver import MonodomainSplittingSolver
 
 from xalbrain.cellmodels import (
     Cressman,
@@ -17,7 +17,7 @@ from coupled_utils import (
     get_mesh,
     CellTags,
     InterfaceTags,
-    CoupledSplittingsolverParameters,
+    CoupledSplittingSolverParameters,
     CoupledODESolverParameters,
     CoupledMonodomainParameters,
 )
@@ -30,9 +30,9 @@ from postspec import (
 
 def get_brain() -> CoupledBrainModel:
     time_constant = df.Constant(0)
-    mesh, cell_function, interface_function = get_mesh("meshes", "fine_all")
-    cell_tags = CellTags()
-    interface_tags = InterfaceTags()
+    mesh, cell_function, interface_function = get_mesh("new_meshes", "skullgmwm")
+    cell_tags = CellTags(CSF=3, GM=2, WM=1)
+    interface_tags = InterfaceTags(skull=3, CSF_GM=2, GM_WM=1, CSF=None, GM=None, WM=None)
 
     Mi = 1
     lgm = Mi/2.76
@@ -43,13 +43,13 @@ def get_brain() -> CoupledBrainModel:
 
     # Include Cm and Chi as well
     Mi_dict = {
-        1: df.Constant(16.54),                   # Dlougherty isotropic CSF conductivity 16.54 [mS/cm]
+        1: df.Constant(16.54),              # Dlougherty isotropic CSF conductivity 16.54 [mS/cm]
         2: df.Constant(Mi/(Chi*Cm)),        # Dlougherty isotropic GM intracellular conductivity 1.0 [mS/cm]
         3: df.Constant(Mi/(Chi*Cm)),        # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
     }
 
     lambda_dict = {
-        1: df.Constant(1),           # I don't know what to do here yet
+        1: df.Constant(1),                  # I don't know what to do here yet
         2: df.Constant(lgm/(1 + lgm)),
         3: df.Constant(lwm/(1 + lwm)),
     }
@@ -80,14 +80,14 @@ def get_brain() -> CoupledBrainModel:
     return brain
 
 
-def get_solver(brain) -> CoupledSplittingsolver:
-    parameters = CoupledSplittingsolverParameters()
+def get_solver(brain) -> MonodomainSplittingSolver:
+    parameters = CoupledSplittingSolverParameters()
     ode_parameters = CoupledODESolverParameters(
         valid_cell_tags=[2],
         reload_extension_modules=False
     )
     pde_parameters = CoupledMonodomainParameters()
-    solver = CoupledSplittingsolver(
+    solver = MonodomainSplittingSolver(
         brain=brain,
         parameters=parameters,
         ode_parameters=ode_parameters,

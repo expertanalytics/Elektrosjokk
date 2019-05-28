@@ -49,18 +49,15 @@ class CoupledBrainModel:
 
         self._cell_tags = cell_tags
         self._interface_tags = interface_tags
-
         self._neumann_boundary_condition = neumann_boundary_condition
-        self._surface_to_volume_factor = df.Constant(surface_to_volume_factor)
-        self._membrane_capacitance = df.Constant(membrane_capacitance)
 
         if surface_to_volume_factor is None:
-            self._surface_to_volume_factor = df.constant(1)
+            self._surface_to_volume_factor = df.Constant(1)
         else:
             self._surface_to_volume_factor = df.Constant(surface_to_volume_factor)
 
         if membrane_capacitance is None:
-            self._membrane_capacitance = df.constant(1)
+            self._membrane_capacitance = df.Constant(1)
         else:
             self._membrane_capacitance = df.Constant(membrane_capacitance)
 

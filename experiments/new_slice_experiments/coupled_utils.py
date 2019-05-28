@@ -46,7 +46,7 @@ class CoupledBidomainParameters(NamedTuple):
     krylov_preconditioner: str = "petsc_amg"
 
 
-class CoupledSplittingsolverParameters(NamedTuple):
+class CoupledSplittingSolverParameters(NamedTuple):
     theta: df.Constant = df.Constant(0.5)
 
 

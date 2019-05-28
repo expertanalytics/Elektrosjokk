@@ -2,7 +2,7 @@ import dolfin as df
 
 from coupled_utils import (
     time_stepper,
-    CoupledSplittingsolverParameters,
+    CoupledSplittingSolverParameters,
     CoupledMonodomainParameters,
     CoupledODESolverParameters,
     CoupledBidomainParameters,
@@ -39,7 +39,7 @@ class CoupledSplittingSolver(ABC):
         self,
         *,
         brain: CoupledBrainModel,
-        parameters: CoupledSplittingsolverParameters,
+        parameters: CoupledSplittingSolverParameters,
     ) -> None:
         """Create solver from given Cardiac Model and (optional) parameters."""
         self._brain = brain
@@ -69,17 +69,9 @@ class CoupledSplittingSolver(ABC):
     def create_pde_solver(self):
         pass
 
+    @abstractmethod
     def merge(self, solution: df.Function) -> None:
-        """
-        Combine solutions from the PDE and the ODE to form a single mixed function.
-
-        `solution` holds the solution from the PDEsolver.
-        """
-        if self.VS.num_sub_spaces() > 1:
-            v = self.vur.sub(0)
-        else:
-            v = self.vur
-        self.merger.assign(solution.sub(0), v)
+        pass
 
     def solve(self, t0: float, t1: float, dt: float) -> Iterator[SolutionStruct]:
         """
@@ -182,7 +174,7 @@ class MonodomainSplittingSolver(CoupledSplittingSolver):
         self,
         *,
         brain: CoupledBrainModel,
-        parameters: CoupledSplittingsolverParameters,
+        parameters: CoupledSplittingSolverParameters,
         ode_parameters: CoupledODESolverParameters,
         pde_parameters: CoupledMonodomainParameters
     ) -> None:
@@ -219,13 +211,22 @@ class MonodomainSplittingSolver(CoupledSplittingSolver):
         )
         return solver
 
+    def merge(self, solution: df.Function) -> None:
+        """
+        Combine solutions from the PDE and the ODE to form a single mixed function.
+
+        `solution` holds the solution from the PDEsolver.
+        """
+        v = self.vur
+        self.merger.assign(solution.sub(0), v)
+
 
 class BidomainSplittingSolver(CoupledSplittingSolver):
     def __init__(
         self,
         *,
         brain: CoupledBrainModel,
-        parameters: CoupledSplittingsolverParameters,
+        parameters: CoupledSplittingSolverParameters,
         ode_parameters: CoupledODESolverParameters,
         pde_parameters: CoupledBidomainParameters
     ) -> None:
@@ -263,3 +264,12 @@ class BidomainSplittingSolver(CoupledSplittingSolver):
             membrane_capacitance=self._brain.membrane_capacitance
         )
         return solver
+
+    def merge(self, solution: df.Function) -> None:
+        """
+        Combine solutions from the PDE and the ODE to form a single mixed function.
+
+        `solution` holds the solution from the PDEsolver.
+        """
+        v = self.vur.sub(0)
+        self.merger.assign(solution.sub(0), v)
