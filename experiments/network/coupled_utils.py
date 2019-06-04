@@ -14,18 +14,18 @@ from xalode import VectorInt
 
 
 class CellTags(NamedTuple):
-    CSF: int = 0 # 1
-    GM: int = 0 # 2
-    WM: int = 0 # 3
+    CSF: int = 1
+    GM: int = 2
+    WM: int = 3
 
 
 class InterfaceTags(NamedTuple):
-    CSF_GM: int = 0 # 4
-    GM_WM: int = 0 # 5
-    skull: int = 0# 6
-    CSF: int = 0 # 7
-    GM: int = 0 # 8
-    WM: int = 0 # 9
+    CSF_GM: int = 4
+    GM_WM: int = 5
+    skull: int = 6
+    CSF: int = 7
+    GM: int = 8
+    WM: int = 9
 
 
 class CoupledMonodomainParameters(NamedTuple):
@@ -37,7 +37,16 @@ class CoupledMonodomainParameters(NamedTuple):
     krylov_preconditioner: str = "petsc_amg"
 
 
-class CoupledSplittingsolverParameters(NamedTuple):
+class CoupledBidomainParameters(NamedTuple):
+    timestep: df.Constant = df.Constant(1.0)
+    theta: df.Constant = df.Constant(0.5)
+    linear_solver_type: str = "direct"
+    lu_type: str = "default"
+    krylov_method: str = "gmres"   # CG fails
+    krylov_preconditioner: str = "petsc_amg"
+
+
+class CoupledSplittingSolverParameters(NamedTuple):
     theta: df.Constant = df.Constant(0.5)
 
 
@@ -49,9 +58,19 @@ class CoupledODESolverParameters(NamedTuple):
 
 
 def get_mesh(directory: str, name: str) -> Tuple[df.Mesh, df.MeshFunction, df.MeshFunction]:
-    mesh = df.UnitIntervalMesh(10)
-    cell_function = None
-    interface_function = None
+    mesh = df.Mesh()
+    with df.XDMFFile(f"{directory}/{name}.xdmf") as infile:
+        infile.read(mesh)
+
+    mvc = df.MeshValueCollection("size_t", mesh, 2)
+    with df.XDMFFile(f"{directory}/{name}_cf.xdmf") as infile:
+        infile.read(mvc, "cell_data")
+    cell_function = df.MeshFunction("size_t", mesh, mvc)
+
+    mvc = df.MeshValueCollection("size_t", mesh, 1)
+    with df.XDMFFile(f"{directory}/{name}_ff.xdmf") as infile:
+        infile.read(mvc, "facet_data")
+    interface_function = df.MeshFunction("size_t", mesh, mvc)
     return mesh, cell_function, interface_function
 
 

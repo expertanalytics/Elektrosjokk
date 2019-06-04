@@ -54,11 +54,11 @@ def get_brain() -> CoupledBrainModel:
         3: df.Constant(lwm/(1 + lwm)),
     }
 
-    A = 50
-    a = 0.1
+    A = 800
+    a = 0.01
     x0 = -46.4676
     y0 = 63.478
-    expr_str = "A*exp(-a*(pow(x[0] - x0, 2) + pow(x[1] - y0, 2)))*sin(t*2*pi*1/200)"     # 2 Hz?
+    expr_str = "A*exp(-a*(pow(x[0] - x0, 2) + pow(x[1] - y0, 2)))*sin(t*2*pi*1e-3/20)"     # 2 Hz?
     applied_current = df.Expression(expr_str, degree=1, A=A, a=a, x0=x0, y0=y0, t=time_constant)
 
     neumann_bc_dict = {
@@ -118,7 +118,7 @@ def get_saver(
 if __name__ == "__main__":
     brain = get_brain()
     solver = get_solver(brain)
-    saver = get_saver(brain, "Test")
+    saver = get_saver(brain, "Test_mono")
 
     for i, solution_struct in enumerate(solver.solve(0, 1e3, 0.025)):
         print(f"{i} -- {brain.time(0)} -- {solution_struct.vur.vector().norm('l2')}")

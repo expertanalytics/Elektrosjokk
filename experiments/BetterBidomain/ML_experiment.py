@@ -19,7 +19,6 @@ from postspec import (
     SaverSpec,
     LoaderSpec,
 )
-
 from post import (
     Saver,
     Loader,
@@ -49,7 +48,7 @@ def get_post_processor(brain: xb.CardiacModel, outpath: Path) -> Saver:
     saver = Saver(pp_spec)
     saver.store_mesh(brain.mesh)
 
-    space_stride = 40
+    space_stride = 4
     field_spec = FieldSpec(
         save_as=("xdmf", "hdf5"),
         stride_timestep=space_stride
@@ -59,7 +58,7 @@ def get_post_processor(brain: xb.CardiacModel, outpath: Path) -> Saver:
 
     points = get_points(brain.mesh.geometry().dim(), num_points=11)
 
-    time_stride = 40
+    time_stride = 400
     point_field_spec = FieldSpec(stride_timestep=time_stride)
     saver.add_field(PointField("point_v", point_field_spec, points))
     return saver
@@ -120,13 +119,17 @@ def run_ML_experiment(
 
 
 if __name__ == "__main__":
-    conductivity_list = (1/8,)
-    KL_list = (1/5,)
+    conductivity_list = (1.0,)
+    KL_list = (1/4,)
     parameter_list = product(conductivity_list, KL_list)
 
-    def experiment(params, N=1000, dt=0.025, T=1e1, dimension=1, K1=4, K2=4):
+    def experiment(params, N=500, dt=0.025, T=5e2, dimension=1, K1=4, K2=8):
         """partial function wrapper."""
         conductivity, Kinf_domain_size = params
+        # identifier = "M{:3}-L{:3}".format(
+        #     str(conductivity).replace(".", ""), str(Kinf_domain_size).replace(".", "")
+        # )
+        # outpath = Path("experimentI") / identifier
         outpath = "BetterBidomain"
         args = (conductivity, Kinf_domain_size, N, dt, T, K1, K2, dimension, outpath)
         kwargs = {"reload": False}

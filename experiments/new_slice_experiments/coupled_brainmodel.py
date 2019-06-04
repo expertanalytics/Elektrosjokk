@@ -28,6 +28,7 @@ class CoupledBrainModel:
         intracellular_conductivity: Dict[int, df.Expression],
         other_conductivity: Dict[int, df.Expression],
         neumann_boundary_condition: Dict[int, df.Expression] = None,
+        external_stimulus: Dict[int, df.Expression] = None,
         surface_to_volume_factor: Union[float, df.Constant] = None,
         membrane_capacitance: Union[float, df.Constant] = None
     ):
@@ -50,6 +51,7 @@ class CoupledBrainModel:
         self._cell_tags = cell_tags
         self._interface_tags = interface_tags
         self._neumann_boundary_condition = neumann_boundary_condition
+        self._external_stimulus = external_stimulus
 
         if surface_to_volume_factor is None:
             self._surface_to_volume_factor = df.Constant(1)
