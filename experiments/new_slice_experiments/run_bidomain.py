@@ -2,6 +2,8 @@ import dolfin as df
 
 from pathlib import Path
 from typing import Union
+from scipy import signal
+from math import pi
 
 from postfields import Field
 from post import Saver
@@ -52,12 +54,29 @@ def get_brain() -> CoupledBrainModel:
         3: df.Constant(1.26),      # Dougherty isotropic "M extracellular conductivity 1.26 [mS/cm]
     }
 
-    A = -800
-    a = 0.01
-    x0 = -46.4676
-    y0 = 63.478
-    expr_str = "A*exp(-a*(pow(x[0] - x0, 2) + pow(x[1] - y0, 2)))*abs(sin(t*2*pi*1e-3/20))"     # 20 Hz?
-    applied_current = df.Expression(expr_str, degree=1, A=A, a=a, x0=x0, y0=y0, t=time_constant)
+
+    class Source(df.UserExpression):
+        def __init__(self, frequency, amplitude, x0, alpha, time, **kwargs):
+            super().__init__(kwargs)
+            self._frequency = frequency     # in Hz
+            self._amplitude = amplitude
+            self._x0, self._y0 = x0
+            self._alpha = alpha
+            self._time = float(time)
+
+        def eval(self, values, x):
+            t = self._time
+            A = self._amplitude*signal.square(t*2*pi*self._frequency)
+            x0 = self._x0
+            y0 = self._y0
+            values[0] = A*df.exp(-self._alpha*((x[0] - x0)**2 + (x[1] - y0)**2))
+
+
+    frequency = 20*1e-3
+    amplitude = -800
+    x0 = (-46.4676, 63.478)
+    alpha = 0.01
+    applied_current = Source(frequency, amplitude, x0, alpha, time_constant, degree=1)
 
     neumann_bc_dict = {
         3: applied_current      # Applied to skull
