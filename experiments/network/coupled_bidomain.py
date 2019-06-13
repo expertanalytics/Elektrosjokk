@@ -285,3 +285,204 @@ class CoupledBidomainSolver:
 
         # Reassemble matrix
         df.assemble(self._lhs, tensor=self._lhs_matrix)
+
+
+class NetworkBidomainSolver(CoupledBidomainSolver):
+    def __init__(
+        self,
+        time: df.Constant,
+        mesh: df.Mesh,
+        intracellular_conductivity: Dict[int, df.Expression],
+        extracellular_conductivity: Dict[int, df.Expression],
+        cell_function: df.MeshFunction,
+        cell_tags: CellTags,
+        interface_function: df.MeshFunction,
+        interface_tags: InterfaceTags,
+        parameters: CoupledBidomainParameters,
+        neumann_boundary_condition: Dict[int, df.Expression] = None,
+        v_prev: df.Function = None,
+        surface_to_volume_factor: Union[float, df.Constant] = None,
+        membrane_capacitance: Union[float, df.Constant] = None
+    ) -> None:
+        self._time = time
+        self._mesh = mesh
+        self._parameters = parameters
+
+        if surface_to_volume_factor is None:
+            surface_to_volume_factor = df.constant(1)
+
+        if membrane_capacitance is None:
+            membrane_capacitance = df.constant(1)
+
+        # Set Chi*Cm
+        self._chi_cm = df.Constant(surface_to_volume_factor)*df.Constant(membrane_capacitance)
+
+        if not set(intracellular_conductivity.keys()) == set((extracellular_conductivity.keys())):
+            raise ValueError("intracellular conductivity and lambda does not havemnatching keys.")
+        if not set(cell_tags) == set(intracellular_conductivity.keys()):
+            raise ValueError("Cell tags does not match conductivity keys")
+        self._intracellular_conductivity = intracellular_conductivity
+        self._extracellular_conductivity = extracellular_conductivity
+
+        # Check cell tags
+        _cell_function_tags = set(cell_function.array())
+        if set(cell_tags) != _cell_function_tags:       # If not equal
+            msg = "Mismatching cell tags. Expected {}, got {}"
+            raise ValueError(msg.format(set(cell_tags), _cell_function_tags))
+        self._cell_tags = cell_tags
+        self._cell_function = cell_function
+
+        # Check interface tags
+        _interface_function_tags = {*set(interface_function.array()), None}
+        if not set(interface_tags) <= _interface_function_tags:     # if not subset of
+            msg = "Mismatching interface tags. Expected {}, got {}"
+            raise ValueError(msg.format(set(interface_tags), _interface_function_tags))
+        self._interface_function = interface_function
+        self._interface_tags = interface_tags
+
+        # Set up function spaces
+        self._transmembrane_function_space = df.FunctionSpace(self._mesh, "CG", 1)
+        transmembrane_element = df.FiniteElement("CG", self._mesh.ufl_cell(), 1)
+        extracellular_element = df.FiniteElement("CG", self._mesh.ufl_cell(), 1)
+
+        if neumann_boundary_condition is None:
+            self._neumann_bc: Dict[int, df.Expression] = dict()
+        else:
+            self._neumann_bc = neumann_boundary_condition
+
+        if self._parameters.linear_solver_type == "direct":
+            lagrange_element = df.FiniteElement("R", self._mesh.ufl_cell(), 0)
+            mixed_element = df.MixedElement((transmembrane_element, extracellular_element, lagrange_element))
+        else:
+            mixed_element = df.MixedElement((transmembrane_element, extracellular_element))
+        self._VUR = df.FunctionSpace(mesh, mixed_element)    # TODO: rename to something sensible
+
+        # Set-up solution fields:
+        if v_prev is None:
+            self._merger = df.FunctionAssigner(self._transmembrane_function_space, self._VUR.sub(0))
+            self._v_prev = df.Function(self._transmembrane_function_space, name="v_prev")
+        else:
+            self._merger = None
+            self._v_prev = v_prev
+        self._vur = df.Function(self._VUR, name="vur")        # TODO: Give sensible name
+
+        # For normlising rhs_vector. TODO: Unsure about this. Check the nullspace from cbcbeat
+        self._extracellular_dofs = np.asarray(self._VUR.sub(1).dofmap().dofs())
+
+        # Mark first timestep
+        self._timestep: df.Constant = self._parameters.timestep
+        self.variational_forms(self._timestep)
+
+    def variational_forms(self, dt: df.Constant) -> None:
+        """Create the variational forms corresponding to the given
+        discretization of the given system of equations.
+
+        *Arguments*
+          kn (:py:class:`ufl.Expr` or float)
+            The time step
+
+        *Returns*
+          (lhs, rhs) (:py:class:`tuple` of :py:class:`ufl.Form`)
+
+        """
+        # Extract theta parameter and conductivities
+        theta = self._parameters.theta
+        Mi = self._intracellular_conductivity
+        Me = self._extracellular_conductivity
+
+        # Define variational formulation
+        if self._parameters.linear_solver_type == "direct":
+            v, u, multiplier = df.TrialFunctions(self._VUR)
+            v_test, u_test, multiplier_test = df.TestFunctions(self._VUR)
+        else:
+            v, u = df.TrialFunctions(self._VUR)
+            v_test, u_test = df.TestFunctions(self._VUR)
+
+        Dt_v = (v - self._v_prev)/dt
+        Dt_v *= self._chi_cm                # Chi is surface to volume aration. Cm is capacitance
+        v_mid = theta*v + (1.0 - theta)*self._v_prev
+
+        # Set-up measure and rhs from stimulus
+        dOmega = df.Measure("dx", domain=self._mesh, subdomain_data=self._cell_function)
+        dGamma = df.Measure("ds", domain=self._mesh, subdomain_data=self._interface_function)
+
+        # Loop over all domains
+        lhs_mass = Dt_v*v_test*dOmega()
+        lhs_stiff = 0
+        for key in set(self._cell_tags):
+            lhs_stiff += df.inner(Mi[key]*df.grad(v_mid), df.grad(v_test))*dOmega(key)
+            lhs_stiff += df.inner(Mi[key]*df.grad(u), df.grad(v_test))*dOmega(key)
+            lhs_stiff += df.inner(Mi[key]*df.grad(v_mid), df.grad(u_test))*dOmega(key)
+            lhs_stiff += df.inner((Mi[key] + Me[key])*df.grad(u), df.grad(u_test))*dOmega(key)
+
+            # If Lagrangian multiplier
+            if self._parameters.linear_solver_type == "direct":
+                lhs_stiff += (multiplier_test*u + multiplier*u_test)*dOmega(key)
+
+        for key in set(self._interface_tags):
+            # Default to 0 if not defined for tag
+            lhs_stiff += self._neumann_bc.get(key, df.Constant(0))*u_test*dGamma(key)
+
+        lhs_mass, L_mass = df.system(lhs_mass)
+        lhs_stiff, L_stiff = df.system(lhs_stiff)
+        self._rhs_vector = df.assemble(L_mass + L_stiff)
+
+        a_mass = df.as_backend_type(df.assemble(lhs_mass))
+        a_stiff = df.as_backend_type(df.assemble(lhs_stiff))
+
+        lhs_matrix = a_mass.mat() + a_stiff.mat()
+        self._lhs_matrix = df.Matrix(df.PETScMatrix(lhs_matrix))
+        import numpy as np
+        np.set_printoptions(precision=3)
+
+        for line in a_stiff.array():
+            print(np.array2string(line).replace("\n", ""))
+        assert False
+
+        # self._lhs, self._rhs = self.variational_forms(self._timestep)
+        # self._lhs_matrix = df.assemble(self._lhs)
+        # self._rhs_vector = df.Vector(self._mesh.mpi_comm(), self._lhs_matrix.size(0))
+
+    def step(self, t0: float, t1: float) -> None:
+        r"""
+        Solve on the given time step (t0, t1).
+
+        *Arguments*
+          interval (:py:class:`tuple`)
+            The time interval (t0, t1) for the step
+
+        *Invariants*
+          Assuming that v\_ is in the correct state for t0, gives
+          self.vur in correct state at t1.
+        """
+        dt = t1 - t0
+        theta = self._parameters.theta
+        t = t0 + theta*dt
+        self._time.assign(t)
+
+        # Update matrix and linear solvers etc as needed
+        if self._timestep is None:
+            self._timestep = df.Constant(dt)
+            self._lhs, self._rhs = self.variational_forms(self._timestep)
+
+            # Preassemble left-hand side and initialize right-hand side vector
+            # self._lhs_matrix = df.assemble(self._lhs)
+            # self._rhs_vector = df.Vector(self._mesh.mpi_comm(), self._lhs_matrix.size(0))
+            # self._lhs_matrix.init_vector(self._rhs_vector, 0)
+
+            # Create linear solver (based on parameter choices)
+            self._linear_solver = self._create_linear_solver()
+        else:
+            self._update_solver(dt)
+
+        # Assemble right-hand-side
+        df.assemble(self._rhs, tensor=self._rhs_vector)
+
+        rhs_norm = self._rhs_vector[self._extracellular_dofs].sum()/self._extracellular_dofs.size
+        self._rhs_vector[self._extracellular_dofs] -= rhs_norm
+
+        # Solve problem
+        self._linear_solver.solve(
+            self._vur.vector(),
+            self._rhs_vector
+        )

@@ -17,6 +17,8 @@ from coupled_utils import (
     time_stepper,
 )
 
+from IPython import embed
+
 
 class CoupledMonodomainSolver:
     def __init__(
@@ -248,19 +250,8 @@ class NetworkMonodomainSolver(CoupledMonodomainSolver):
             raise ValueError("intracellular conductivity and lambda does not have natching keys.")
         self._lambda = conductivity_ratio
 
-        # Periodic boundary conditions
-        class PeriodicBoundary(df.SubDomain):
-            def inside(self, x, on_boundary):
-                """Left boundary is 'target domain'"""
-                return x[0] < df.DOLFIN_EPS and x[0] > -df.DOLFIN_EPS and on_boundary
-
-            def map(self, x, y):
-                """Map right boundary (H) to left boundary."""
-                y[0] = x[0] - 1.0
-
         # Function spaces
-        self._function_space = df.FunctionSpace(mesh, "CG", 1, constrained_domain=PeriodicBoundary())
-        # self._function_space = df.FunctionSpace(mesh, "CG", 1)
+        self._function_space = df.FunctionSpace(mesh, "CG", 1)
 
         # Test and trial and previous functions
         self._v_trial = df.TrialFunction(self._function_space)
@@ -290,46 +281,140 @@ class NetworkMonodomainSolver(CoupledMonodomainSolver):
 
         # Crete integration measures -- Cells
         self._dOmega = df.Measure("dx", domain=self._mesh, subdomain_data=self._cell_function)
+        self._variational_forms()
 
-        # Create variational forms
-        self._timestep = df.Constant(self._parameters.timestep)
-        self._lhs, self._rhs = self._variational_forms()
+        self._linear_solver = create_linear_solver(self._lhs_matrix, self._parameters)
 
-        # Preassemble left-hand side (will be updated if time-step changes)
-        # periodic_bc = df.DirichletBC(self._function_space, df.Constant(0.0), df.DomainBoundary())
-        # self._lhs_matrix, self._rhs_vector = df.assemble_system(self._lhs, self._rhs, periodic_bc)
-        self._lhs_matrix, self._rhs_vector = df.assemble_system(self._lhs, self._rhs)
+    def _variational_forms(self) -> None:
+        # Localise variables for convenicence
+        dt = df.Constant(self._parameters.timestep)
+        self._timestep = dt
+        theta = self._parameters.theta
+        Mi = self._conductivity
+        lbda = self._lambda
 
-        # self._lhs_matrix = df.assemble(self._lhs)
-        # self._rhs_vector = df.Vector(mesh.mpi_comm(), self._lhs_matrix.size(0))
-        # self._lhs_matrix.init_vector(self._rhs_vector, 0)
+        dOmega = self._dOmega
+        dGamma = self._dGamma
 
-        # import scipy.sparse as sp
-        # from petsc4py import PETSc
+        v = self._v_trial
+        v_test = self._v_test
 
-        # full_matrix = self._lhs_matrix.array()
+        # Set-up variational problem
+        dvdt = (v - self._v_prev)/dt
+        v_mid = theta*v + (1.0 - theta)*self._v_prev
 
-        # full_matrix[0, -1] = full_matrix[1, 0]
-        # full_matrix[0, 0] = full_matrix[1, 1]
-        # full_matrix[0, 1] = full_matrix[1, 2]
+        # Cell contributions
+        # Form = dvdt*v_test*domega()
+        mass = dvdt*v_test*dOmega()
 
-        # full_matrix[-1, -2] = full_matrix[-2, -3]
-        # full_matrix[-1, -1] = full_matrix[-2, -2]
-        # full_matrix[-1, 0] = full_matrix[-2, -1]
+        stiffness = 0
+        for cell_tag in self._cell_tags:
+            stiffness += lbda[cell_tag]*df.inner(Mi[cell_tag]*df.grad(v_mid), df.grad(v_test))*dOmega(cell_tag)
+            stiffness += self._external_stimulus.get(cell_tag, df.Constant(0))*v_test*dOmega(cell_tag)
 
-        # import numpy as np
-        # np.set_printoptions(precision=3)
-        # from IPython import embed; embed()
+        # Boundary contributions -- Harmonic BCs are hacked in
+        a_mass, L_mass = df.system(mass)
+        a_stiff, L_stiff = df.system(stiffness)
+        self._rhs = L_mass + L_stiff
+        self._rhs_vector = df.assemble(self._rhs)
+
+        # lhs_mass = self._periodic_bc(df.assemble(a_mass))
+        # lhs_stiff = self._periodic_bc(df.assemble(a_stiff))
+        lhs_mass = df.as_backend_type(df.assemble(a_mass))
+        lhs_stiff = df.assemble(a_stiff)
+        import numpy as np
+        import scipy.sparse as sp
+        from petsc4py import PETSc
+        np.set_printoptions(precision=3)
+
+        ##################################################################################
+        ##################################################################################
+
+        full_stiff = lhs_stiff.array()
+        N = full_stiff.shape[0]
+        INDICES = np.arange(1, N - 1)
+
+        RHO = int(0.01*N)    # percentage of refirings
+        i = np.random.choice(INDICES, size=RHO)
+        j = np.random.choice(INDICES[~np.in1d(INDICES, i)], size=i.size)
+        assert not np.in1d(j, i).all() or RHO == 0
+
+        # i = np.array([100])
+        # j = i * 2 + 300
+
+        # WEIGHT = full_stiff[0, 1]      # Off diagonal
+        WEIGHT = 0.0001
+
+        # full_stiff[i + 1, i] = 0
+        # full_stiff[i - 1, i] = 0
+
+        full_stiff[i, j] = WEIGHT
+        full_stiff[j, i] = WEIGHT
+
+        sparse_matrix = sp.csc_matrix(full_stiff.shape)
+        sparse_matrix[:, :] = full_stiff
+
+        p1 = sparse_matrix.indptr
+        p2 = sparse_matrix.indices
+        p3 = sparse_matrix.data
+        lhs_stiff = df.PETScMatrix(PETSc.Mat().createAIJ(size=full_stiff.shape, csr=(p1, p2, p3)))
+
+        # print(lhs_stiff.array())
+        # print(lhs_mass.array())
+        # embed()
+
+        ##################################################################################
+        ##################################################################################
+
+        lhs_matrix = lhs_mass.mat() + lhs_stiff.mat()
+        self._lhs_matrix = df.Matrix(df.PETScMatrix(lhs_matrix))
         # assert False
 
-        # full_matrix[0, -1] = full_matrix[0, 1]
-        # full_matrix[-1, 0] = full_matrix[-1, -2]
-        # sparse_matrix = sp.csc_matrix(full_matrix.shape)
-        # sparse_matrix[:, :] = full_matrix
+    def step(self, t0, t1) -> None:
+        # Extract interval and thus time-step
+        theta = self._parameters.theta
+        dt = t1 - t0
+        t = t0 + theta*dt
+        self._time.assign(t)
 
-        # p1 = sparse_matrix.indptr
-        # p2 = sparse_matrix.indices
-        # p3 = sparse_matrix.data
-        # petscmat = PETSc.Mat().createAIJ(size=full_matrix.shape, csr=(p1, p2, p3))
-        # self._lhs_matrix = df.Matrix(df.PETScMatrix(petscmat))
-        self._linear_solver = create_linear_solver(self._lhs_matrix, self._parameters)
+        # Update matrix and linear solvers etc as needed
+        self._update_solver(dt)
+
+        # Assemble right-hand-side
+        df.assemble(self._rhs, tensor=self._rhs_vector)
+
+        # Super hacky -- Get a finite difference approximation
+        # vector_size = self._rhs_vector.size()
+        # self._rhs_vector[0] = self._rhs_vector[1]
+        # self._rhs_vector[vector_size - 1] = self._rhs_vector[vector_size - 2]
+
+        # Solve problem
+        self._linear_solver.solve(
+            self._v.vector(),
+            self._rhs_vector
+        )
+
+    def _periodic_bc(self, petsc_matrix) -> Any:
+        import scipy.sparse as sp
+        from petsc4py import PETSc
+
+        full_matrix = petsc_matrix.array()
+        full_matrix[0, -1] = full_matrix[1, 0]
+        full_matrix[0, 0] = full_matrix[1, 1]
+        full_matrix[0, 1] = full_matrix[1, 2]
+
+        full_matrix[-1, -2] = full_matrix[-2, -3]
+        full_matrix[-1, -1] = full_matrix[-2, -2]
+        full_matrix[-1, 0] = full_matrix[-2, -1]
+
+        full_matrix[0, -1] = full_matrix[0, 1]
+        full_matrix[-1, 0] = full_matrix[-1, -2]
+
+        sparse_matrix = sp.csc_matrix(full_matrix.shape)
+        sparse_matrix[:, :] = full_matrix
+
+        p1 = sparse_matrix.indptr
+        p2 = sparse_matrix.indices
+        p3 = sparse_matrix.data
+        petscmat = PETSc.Mat().createAIJ(size=full_matrix.shape, csr=(p1, p2, p3))
+        return df.PETScMatrix(petscmat)

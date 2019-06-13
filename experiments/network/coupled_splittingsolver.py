@@ -25,7 +25,10 @@ from coupled_monodomain import (
     NetworkMonodomainSolver,
 )
 
-from coupled_bidomain import CoupledBidomainSolver
+from coupled_bidomain import (
+    CoupledBidomainSolver,
+    NetworkBidomainSolver,
+)
 
 from coupled_brainmodel import CoupledBrainModel
 
@@ -303,6 +306,35 @@ class NetworkMonodomainSplittingSolver(MonodomainSplittingSolver):
             self._brain.neumann_boundary_condition,
             self._brain.external_stimulus,
             v_prev=self.vs[0],
+        )
+        return solver
+
+    def create_ode_solver(self):
+        solver = CardiacODESolver(
+            self._brain.mesh,
+            self._brain.time,
+            self._brain.cell_model
+        )
+        return solver
+
+
+class NetworkBidomainSplittingSolver(BidomainSplittingSolver):
+    def create_pde_solver(self) -> CoupledMonodomainSolver:
+        """The idea is to subplacc this and implement another version of this function."""
+        solver = NetworkBidomainSolver(
+            self._brain.time,
+            self._brain.mesh,
+            self._brain.intracellular_conductivity,
+            self._brain.extracellular_conductivity,
+            self._brain.cell_function,
+            self._brain.cell_tags,
+            self._brain.interface_function,
+            self._brain.interface_tags,
+            self._pde_parameters,
+            self._brain.neumann_boundary_condition,
+            v_prev=self.vs[0],
+            surface_to_volume_factor=self._brain.surface_to_volume_factor,
+            membrane_capacitance=self._brain.membrane_capacitance
         )
         return solver
 

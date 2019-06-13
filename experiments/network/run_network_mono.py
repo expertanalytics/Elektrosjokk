@@ -29,11 +29,14 @@ from postspec import (
     SaverSpec,
 )
 
+from IPython import embed
+
 
 def get_mesh():
-    mesh = df.UnitIntervalMesh(500)
+    mesh = df.UnitIntervalMesh(2000)
+    mesh.coordinates()[:] *= 10      # 10 cm
 
-    CSF = df.CompiledSubDomain("x[0] < 0.15 || x[0] > 0.35")
+    CSF = df.CompiledSubDomain("x[0] < 1.5 || x[0] > 3.5")
 
     cell_function = df.MeshFunction("size_t", mesh, mesh.geometric_dimension())
     cell_function.set_all(2)        # GM
@@ -85,7 +88,7 @@ def get_brain() -> CoupledBrainModel:
     # }
 
     kinf_str = "x[0] < {d1} || x[0] > {d2} ? {K1} : {K2}"
-    Kinf = df.Expression(kinf_str.format(d1=0.15, d2=0.35, K1=4, K2=8), degree=1)
+    Kinf = df.Expression(kinf_str.format(d1=1.5, d2=3.5, K1=4, K2=8), degree=1)
     cressman_parameters = Cressman.default_parameters()
     cressman_parameters["Koinf"] = Kinf
     cell_model = Cressman(params=cressman_parameters)
@@ -112,7 +115,13 @@ def get_solver(brain, timestep) -> Union[NetworkMonodomainSplittingSolver, Monod
         valid_cell_tags=[2, 3],
         reload_extension_modules=False
     )
-    pde_parameters = CoupledMonodomainParameters(theta=0.5, timestep=timestep)
+    pde_parameters = CoupledMonodomainParameters(
+        theta=0.5,
+        timestep=timestep,
+        linear_solver_type="direct",
+        krylov_method="cg",
+        krylov_preconditioner="petsc_amg"
+    )
     solver = NetworkMonodomainSplittingSolver(      # Working
         brain=brain,
         parameters=parameters,
@@ -121,6 +130,22 @@ def get_solver(brain, timestep) -> Union[NetworkMonodomainSplittingSolver, Monod
     )
 
     vs_prev, *_ = solver.solution_fields()
+
+    default_ic = brain.cell_model.default_initial_conditions()
+    stable_ic = [
+        -5.88804333e+01,
+        3.31806918e-02,
+        1.30223180e-01,
+        9.29826068e-01,
+        3.71094385e-06,
+        6.96598540e+00,
+        1.67147481e+01
+    ]
+
+    for key, new_value in zip(default_ic, stable_ic):
+        default_ic[key] = new_value
+
+    brain.cell_model.set_initial_conditions(**default_ic)
     vs_prev.assign(brain.cell_model.initial_conditions())
     return solver
 
@@ -133,7 +158,7 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh)
 
-    field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=10)
+    field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=40)
     saver.add_field(Field("v", field_spec_checkpoint))
 
     field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=40*1000)
@@ -151,7 +176,7 @@ if __name__ == "__main__":
     update_dict = {"v": vur, "vs": vs}
     # saver.store_initial_condition(update_dict)  # v_0 is not set. Updateds internally
 
-    for i, solution_struct in enumerate(solver.solve(0, 5e2, timestep)):
+    for i, solution_struct in enumerate(solver.solve(0, 1e3, timestep)):
         print(f"{i} -- {brain.time(0)} -- {solution_struct.vur.vector().norm('l2')}")
         update_dict["v"] = solution_struct.vur
         update_dict["vs"] = solution_struct.vs
