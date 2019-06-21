@@ -1,4 +1,5 @@
 import dolfin as df
+import numpy as np
 
 from pathlib import Path
 from typing import Union
@@ -9,6 +10,8 @@ from postfields import Field
 from post import Saver
 from coupled_brainmodel import CoupledBrainModel
 from coupled_splittingsolver import BidomainSplittingSolver
+
+from postutils import interpolate_ic
 
 from xalbrain.cellmodels import (
     Cressman,
@@ -28,6 +31,10 @@ from postspec import (
     FieldSpec,
     SaverSpec,
 )
+
+
+def load_array(name: str, directory: Union[Path, str] = "../data") -> np.ndarray:
+    return np.loadtxt(str(Path(directory) / name), delimiter=",")
 
 
 def get_brain() -> CoupledBrainModel:
@@ -54,7 +61,6 @@ def get_brain() -> CoupledBrainModel:
         3: df.Constant(1.26),      # Dougherty isotropic "M extracellular conductivity 1.26 [mS/cm]
     }
 
-
     class Source(df.UserExpression):
         def __init__(self, frequency, amplitude, x0, alpha, time, **kwargs):
             super().__init__(kwargs)
@@ -71,11 +77,10 @@ def get_brain() -> CoupledBrainModel:
             y0 = self._y0
             values[0] = A*df.exp(-self._alpha*((x[0] - x0)**2 + (x[1] - y0)**2))
 
-
     frequency = 20*1e-3
     amplitude = -800
     x0 = (-46.4676, 63.478)
-    alpha = 0.001
+    alpha = 0.0025
     applied_current = Source(frequency, amplitude, x0, alpha, time_constant, degree=1)
 
     neumann_bc_dict = {
@@ -115,7 +120,30 @@ def get_solver(brain) -> BidomainSplittingSolver:
     )
 
     vs_prev, *_ = solver.solution_fields()
-    vs_prev.assign(brain.cell_model.initial_conditions())
+    # vs_prev.assign(brain.cell_model.initial_conditions())
+
+    data_directory = Path.home() / "Documents/Elektrosjokk/data"
+    pial_border = load_array("pial_points.txt", directory=data_directory)
+    wm_border = load_array("white_points.txt", directory=data_directory)
+    ode_solution = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_sol.npy"))
+    ode_time = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_time.npy"))
+
+    # x = np.linspace(-56, -8, 10000)
+    # y = np.interp(np.abs(x), ode_time, ode_solution[0, :])
+
+    # import matplotlib.pyplot as plt
+    # fig, ax = plt.subplots()
+    # ax.plot(x, y, ode_time, ode_solution[0, :])
+    # plt.show()
+    # assert False
+
+    print("interpolate ic is very slow")
+    interpolate_ic(ode_time, ode_solution, vs_prev, [pial_border[:, :2], wm_border[:, :2]], wavespeed=0.03)
+    vfoo, *_ = vs_prev.split(deepcopy=True)
+    with df.XDMFFile(df.MPI.comm_world, "new_meshes/initial_condition_visualisation.xdmf") as fieldfile:
+        fieldfile.write(vfoo, 0.0)
+    with df.XDMFFile(df.MPI.comm_world, "new_meshes/initial_condition.xdmf") as fieldfile:
+        fieldfile.write_checkpoint(vfoo, "initial_condition")
     return solver
 
 
@@ -141,7 +169,7 @@ if __name__ == "__main__":
     solver = get_solver(brain)
     saver = get_saver(brain, "Test_bi")
 
-    for i, solution_struct in enumerate(solver.solve(0, 5e2, 0.025)):
+    for i, solution_struct in enumerate(solver.solve(0, 1e3, 0.025)):
         print(f"{i} -- {brain.time(0)} -- {solution_struct.vur.vector().norm('l2')}")
         v, u, *_ = solution_struct.vur.split(deepcopy=True)
         update_dict = {
