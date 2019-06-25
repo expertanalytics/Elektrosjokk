@@ -11,7 +11,11 @@ from post import Saver
 from coupled_brainmodel import CoupledBrainModel
 from coupled_splittingsolver import BidomainSplittingSolver
 
-from postutils import interpolate_ic
+from postutils import (
+    interpolate_ic,
+    store_sourcefiles,
+    simulation_directory,
+)
 
 from xalbrain.cellmodels import (
     Cressman,
@@ -128,16 +132,7 @@ def get_solver(brain) -> BidomainSplittingSolver:
     ode_solution = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_sol.npy"))
     ode_time = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_time.npy"))
 
-    # x = np.linspace(-56, -8, 10000)
-    # y = np.interp(np.abs(x), ode_time, ode_solution[0, :])
-
-    # import matplotlib.pyplot as plt
-    # fig, ax = plt.subplots()
-    # ax.plot(x, y, ode_time, ode_solution[0, :])
-    # plt.show()
-    # assert False
-
-    print("interpolate ic is very slow")
+    print("Interpolate ic is very slow!")
     interpolate_ic(ode_time, ode_solution, vs_prev, [pial_border[:, :2], wm_border[:, :2]], wavespeed=0.03)
     vfoo, *_ = vs_prev.split(deepcopy=True)
     with df.XDMFFile(df.MPI.comm_world, "new_meshes/initial_condition_visualisation.xdmf") as fieldfile:
@@ -151,6 +146,15 @@ def get_saver(
         brain: CoupledBrainModel,
         outpath: Union[str, Path]
 ) -> Saver:
+    sourcefiles = [
+        "coupled_bidomain.py",
+        "coupled_brainmodel.py",
+        "coupled_odesolver.py",
+        "coupled_splittingsolver.py",
+        "coupled_utils.py",
+    ]
+    store_sourcefiles(map(Path, sourcefiles), outpath)
+
     saver_parameters = SaverSpec(casedir=outpath, overwrite_casedir=True)
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh)
@@ -167,7 +171,14 @@ def get_saver(
 if __name__ == "__main__":
     brain = get_brain()
     solver = get_solver(brain)
-    saver = get_saver(brain, "Test_bi")
+
+    import datetime
+    identifier = simulation_directory(
+        parameters={"time": datetime.datetime.now()},
+        directory_name=".simulations/Bidomain_random_IC"
+    )
+
+    saver = get_saver(brain, identifier)
 
     for i, solution_struct in enumerate(solver.solve(0, 1e3, 0.025)):
         print(f"{i} -- {brain.time(0)} -- {solution_struct.vur.vector().norm('l2')}")
