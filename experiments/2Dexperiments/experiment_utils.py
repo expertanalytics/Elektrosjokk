@@ -34,47 +34,58 @@ from typing import (
 )
 
 
-def get_mesh(dimension: int, N: int) -> df.Mesh:
-    """Create the mesh [0, 1]^d cm."""
-    if dimension == 1:
-        mesh = df.UnitIntervalMesh(N)
-    elif dimension == 2:
-        mesh = df.UnitSquareMesh(N, N, "crossed")         # 1cm time 1cm
-    elif dimension == 3:
-        mesh = df.UnitCubeMesh(N, N, N)                   # 1cm time 1cm
-    return mesh
+def get_mesh(
+    *,
+    N: int,
+    square_width: float,
+    csf_start: float
+) -> Tuple[df.Mesh, df.MeshFunction, df.MeshFunction]:
+    """Create the mesh [0, 1]^2 cm and corresponding mesh functions.
+
+    At the moment, the interface function is not used.
+    """
+    mesh = df.UnitSquareMesh(N, N, "crossed")         # 1cm time 1cm
+
+    cell_function = df.MeshFunction("size_t", mesh, mesh.geometric_dimension())
+    cell_function.set_all(0)
+
+    interface_function = df.MeshFunction("size_t", mesh, mesh.geometric_dimension() - 1)
+    interface_function.set_all(0)
+
+    # Make CSF
+    csf = df.CompiledSubDomain("x[0] >= x0", x0=csf_start)
+    csf.mark(cell_function, 11)
+
+    # make the central square
+    x0 = y0 = (1 - square_width) / 2
+    x1 = y1 = (1 + square_width) / 2
+    square = df.CompiledSubDomain(
+        "x[0] >= x0 && x[0] <= x1 && x[1] >= y0 && x[1] <= y1",
+        x0=x0, x1=x1, y0=y0, y1=y1
+    )
+    square.mark(cell_function, 22)
+    return mesh, cell_function, interface_function
 
 
-def get_Kinf(dimension: int, L: float, K1: float, K2: float) -> df.Expression:
+def get_Kinf(L: float, K1: float = 4.0, K2: float = 8.0) -> df.Expression:
     """Assume unit square. """
-    if dimension == 1:
-        kinf_str = "x[0] < {d1} || x[0] > {d2} ? {K1} : {K2}"
-    elif dimension == 2:
-        kinf_str = "x[0] < {d1} || x[0] > {d2}"
-        kinf_str += " || x[1] < {d1} || x[1] > {d2} ? {K1}: {K2}"
-    elif dimension == 3:
-        kinf_str = "x[0] < {d1} || x[0] > {d2}"
-        kinf_str += " || x[1] < {d1} || x[1] > {d2}"
-        kinf_str += " || x[2] < {d1} || x[2] > {d2} ? {K1} : {K2}"
-    else:
-        assert False, "Expected dimension in {1, 2, 3}, got {}".format(dimension)
+    kinf_str = "x[0] < {d1} || x[0] > {d2}"
+    kinf_str += " || x[1] < {d1} || x[1] > {d2} ? {K1}: {K2}"
     Kinf = df.Expression(kinf_str.format(d1=0.5 - L/2, d2=0.5 + L/2, K1=K1, K2=K2), degree=1)
     return Kinf
 
 
-def get_Kinf_circle(dimension, L, K1, K2):
+def get_Kinf_circle(L: float, K1: float = 4, K2: float = 8) -> df.Expression:
     """L is the radius."""
-    msg = "Kinf circle only implemented for 2D, got dimension {dim}".format(dim=dimension)
-    assert dimension == 2, msg
     Kinf_string = "pow(x[0] - 0.5, 2) + pow(x[1] - 0.5, 2) <= {L}*{L} ? {K2} : {K1}".format(L=L, K1=K1, K2=K2)
     return df.Expression(Kinf_string, degree=1)
 
 
 def get_brain(
-        dimension: int,
-        N: int,
+        mesh_resolution: int,
         conductivity: float,
         Kinf_domain_size: float,
+        csf_start: float,
         K1: float = 4,
         K2: float = 8
 ) -> CardiacModel:
@@ -82,18 +93,22 @@ def get_brain(
     Create container class for splitting solver parameters
 
     Arguments:
-        dimension: The topological dimension of the mesh.
         N: Mesh resolution.
         conductivity: The conductivity, or rather, the conductivity times a factor.
         Kinf_domain_size: The side length of the domain where Kinf = 8. In 1D, this is
             simply the lengt of an interval.
     """
-    mesh = get_mesh(dimension, N)
-    Mi = df.Constant(conductivity)
     time_const = df.Constant(0)
-    # Kinf = get_Kinf(dimension, Kinf_domain_size, K1, K2)
-    Kinf = get_Kinf_circle(dimension, Kinf_domain_size, K1, K2)
+    mesh, cell_function, interface_function = get_mesh(
+        N=mesh_resolution,
+        square_width=Kinf_domain_size,
+        csf_start=csf_start
+    )
 
+    Mi = df.Constant(conductivity)
+    Kinf = get_Kinf(Kinf_domain_size, K1=K1, K2=K2)
+
+    # Define cell model
     model_parameters = Cressman.default_parameters()
     model_parameters["Koinf"] = Kinf
     model = Cressman(params=model_parameters)
@@ -103,6 +118,7 @@ def get_brain(
         M_i=Mi,
         M_e=None,
         cell_models=model,
+        cell_domains=cell_function
     )
     return brain
 
@@ -132,14 +148,17 @@ def get_solver(brain: CardiacModel) -> SplittingSolver:
     return solver
 
 
-def assign_initial_conditions(solver: Any) -> None:
+def assign_initial_conditions(solver: Any, ic: Any = None) -> None:
+    """Assign initial conditions. 
+
+    if initial conditons are not supplied, used defaults.
+    """
     brain = solver.model
     model = brain.cell_models
-    vs_, *_ = solver.solution_fields()
-    vs_.assign(model.initial_conditions())
 
+    if ic is None:
+        ic = model.initial_conditions()
 
-def assign_custom_initial_conditions(solver: Any, ic: Any) -> None:
     vs_, *_ = solver.solution_fields()
     vs_.assign(ic)
 
@@ -169,7 +188,4 @@ def get_points(dimension: int, num_points: int) -> np.ndarray:
         bar[:, 1] = my_range
         return np.vstack((foo, bar))
     if dimension == 3:
-        assert False, "Do something clever here"
-        pass
-
-    return Path("{:d}D_out_cressman".format(dim))
+        assert False, "3D points not supported"
