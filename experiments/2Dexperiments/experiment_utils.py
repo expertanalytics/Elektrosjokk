@@ -67,27 +67,30 @@ def get_mesh(
     return mesh, cell_function, interface_function
 
 
-def get_Kinf(L: float, K1: float = 4.0, K2: float = 8.0) -> df.Expression:
-    """Assume unit square. """
-    kinf_str = "x[0] < {d1} || x[0] > {d2}"
-    kinf_str += " || x[1] < {d1} || x[1] > {d2} ? {K1}: {K2}"
-    Kinf = df.Expression(kinf_str.format(d1=0.5 - L/2, d2=0.5 + L/2, K1=K1, K2=K2), degree=1)
-    return Kinf
+def get_Kinf(*, square_width: float, K1: float = 4, K2: float = 8):
+    x0 = y0 = (1 - square_width) / 2
+    x1 = y1 = (1 + square_width) / 2
+    square = df.Expression(
+        "x[0] >= x0 && x[0] <= x1 && x[1] >= y0 && x[1] <= y1 ? K2 : K1",
+        x0=x0, x1=x1, y0=y0, y1=y1, K1=K1, K2=K2, degree=1
+    )
+    return square
 
 
-def get_Kinf_circle(L: float, K1: float = 4, K2: float = 8) -> df.Expression:
+def get_Kinf_circle(*, L: float, K1: float = 4, K2: float = 8) -> df.Expression:
     """L is the radius."""
     Kinf_string = "pow(x[0] - 0.5, 2) + pow(x[1] - 0.5, 2) <= {L}*{L} ? {K2} : {K1}".format(L=L, K1=K1, K2=K2)
     return df.Expression(Kinf_string, degree=1)
 
 
 def get_brain(
-        mesh_resolution: int,
-        conductivity: float,
-        Kinf_domain_size: float,
-        csf_start: float,
-        K1: float = 4,
-        K2: float = 8
+    *,
+    mesh_resolution: int,
+    conductivity: float,
+    kinf_domain_size: float,
+    csf_start: float,
+    K1: float = 4,
+    K2: float = 8
 ) -> CardiacModel:
     """
     Create container class for splitting solver parameters
@@ -95,18 +98,18 @@ def get_brain(
     Arguments:
         N: Mesh resolution.
         conductivity: The conductivity, or rather, the conductivity times a factor.
-        Kinf_domain_size: The side length of the domain where Kinf = 8. In 1D, this is
+        kinf_domain_size: The side length of the domain where Kinf = 8. In 1D, this is
             simply the lengt of an interval.
     """
     time_const = df.Constant(0)
     mesh, cell_function, interface_function = get_mesh(
         N=mesh_resolution,
-        square_width=Kinf_domain_size,
+        square_width=kinf_domain_size,
         csf_start=csf_start
     )
 
     Mi = df.Constant(conductivity)
-    Kinf = get_Kinf(Kinf_domain_size, K1=K1, K2=K2)
+    Kinf = get_Kinf(square_width=kinf_domain_size, K1=K1, K2=K2)
 
     # Define cell model
     model_parameters = Cressman.default_parameters()
@@ -123,7 +126,7 @@ def get_brain(
     return brain
 
 
-def get_solver(brain: CardiacModel) -> SplittingSolver:
+def get_solver(*, brain: CardiacModel) -> SplittingSolver:
     ps = SplittingSolver.default_parameters()
     ps["pde_solver"] = "monodomain"
     ps["theta"] = 0.5
@@ -148,7 +151,7 @@ def get_solver(brain: CardiacModel) -> SplittingSolver:
     return solver
 
 
-def assign_initial_conditions(solver: Any, ic: Any = None) -> None:
+def assign_initial_conditions(*, solver: Any, ic: Any = None) -> None:
     """Assign initial conditions. 
 
     if initial conditons are not supplied, used defaults.
@@ -169,23 +172,3 @@ def reload_initial_condition(solver: Any, casedir: Path) -> None:
     ic = loader.load_initial_condition("v", timestep_index=-10)
     vs_, *_ = solver.solution_fields()
     vs_.assign(ic)
-
-
-def get_points(dimension: int, num_points: int) -> np.ndarray:
-    _npj = num_points*1j
-    if dimension == 1:
-        numbers = np.mgrid[0:1:_npj]
-        return np.vstack(map(lambda x: x.ravel(), numbers)).reshape(-1, dimension)
-    if dimension == 2:
-        # numbers = np.mgrid[0:1:_npj, 0:1:_npj]
-        my_range = np.arange(10)/10
-
-        foo = np.zeros(shape=(10, 2))
-        foo[:, 0] = my_range
-
-        bar = np.zeros(shape=(10, 2))
-        bar[:, 0] = my_range
-        bar[:, 1] = my_range
-        return np.vstack((foo, bar))
-    if dimension == 3:
-        assert False, "3D points not supported"
