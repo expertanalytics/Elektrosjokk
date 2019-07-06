@@ -1,5 +1,4 @@
-import resource
-import warnings
+import resource import warnings
 import time
 import dolfin as df
 import numpy as np

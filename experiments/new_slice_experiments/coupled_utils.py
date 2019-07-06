@@ -17,6 +17,7 @@ class CellTags(NamedTuple):
     CSF: int = 1
     GM: int = 2
     WM: int = 3
+    Kinf: int = 4
 
 
 class InterfaceTags(NamedTuple):
@@ -100,12 +101,14 @@ def create_linear_solver(
 
 
 def masked_dofs(dofmap: df.DofMap, cell_domains_array: np.ndarray, valid_cell_tags: Sequence[int]):
+
     mask_list: List[int] = []
     for i, ct in enumerate(cell_domains_array):
         cell_dofs = dofmap.cell_dofs(i)
         if ct in valid_cell_tags:
             mask_list += list(cell_dofs)
-    return VectorInt(np.unique(mask_list))
+    # return VectorInt(np.unique(mask_list))
+    return VectorInt(mask_list)
 
 
 def time_stepper(*, t0: float, t1: float, dt: float = None) -> Iterator[Tuple[float, float]]:

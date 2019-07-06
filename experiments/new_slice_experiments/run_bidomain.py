@@ -44,7 +44,15 @@ def load_array(name: str, directory: Union[Path, str] = "../data") -> np.ndarray
 def get_brain() -> CoupledBrainModel:
     time_constant = df.Constant(0)
     mesh, cell_function, interface_function = get_mesh("new_meshes", "skullgmwm")
-    cell_tags = CellTags(CSF=3, GM=2, WM=1)
+
+    test_cell_function = df.MeshFunction("size_t", mesh, mesh.geometric_dimension())
+    test_cell_function.set_all(0)
+    df.CompiledSubDomain("x[0] < -20 && x[1] > 55").mark(test_cell_function, 4)
+
+    # Hack?
+    cell_function.array()[(cell_function.array() == 2) & (test_cell_function.array() == 4)] = 4
+
+    cell_tags = CellTags(CSF=3, GM=2, WM=1, Kinf=4)
     interface_tags = InterfaceTags(skull=3, CSF_GM=2, GM_WM=1, CSF=None, GM=None, WM=None)
     # mesh, cell_function, interface_function = get_mesh("meshes", "fine_all")
     # cell_tags = CellTags()
@@ -57,12 +65,14 @@ def get_brain() -> CoupledBrainModel:
         1: df.Constant(1e-12),    # Set to zero?
         2: df.Constant(1),        # Dlougherty isotropic GM intracellular conductivity 1.0 [mS/cm]
         3: df.Constant(1),        # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
+        4: df.Constant(1),       # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
     }
 
     Me_dict = {
         1: df.Constant(16.54),     # Dougherty isotropic CSF conductivity 16.54 [mS/cm]
         2: df.Constant(2.76),      # Dougherty isotropic GM extracellular conductivity 2.76 [mS/cm]
         3: df.Constant(1.26),      # Dougherty isotropic "M extracellular conductivity 1.26 [mS/cm]
+        4: df.Constant(2.76),      # Dougherty isotropic "M extracellular conductivity 1.26 [mS/cm]
     }
 
     class Source(df.UserExpression):
@@ -85,7 +95,7 @@ def get_brain() -> CoupledBrainModel:
     amplitude = -800
     x0 = (-46.4676, 63.478)
     alpha = 0.0025
-    applied_current = Source(frequency, amplitude, x0, alpha, time_constant, degree=1)
+    applied_current = Source(frequency, amplitude, x0, alpha, time_constant, degree=40)
 
     neumann_bc_dict = {
         3: applied_current      # Applied to skull
@@ -111,7 +121,7 @@ def get_brain() -> CoupledBrainModel:
 def get_solver(brain) -> BidomainSplittingSolver:
     parameters = CoupledSplittingSolverParameters()
     ode_parameters = CoupledODESolverParameters(
-        valid_cell_tags=(2,),
+        valid_cell_tags=(2, 4),
         reload_extension_modules=False
     )
     pde_parameters = CoupledBidomainParameters(linear_solver_type="direct")
@@ -124,7 +134,7 @@ def get_solver(brain) -> BidomainSplittingSolver:
     )
 
     vs_prev, *_ = solver.solution_fields()
-    # vs_prev.assign(brain.cell_model.initial_conditions())
+    vs_prev.assign(brain.cell_model.initial_conditions())
 
     data_directory = Path.home() / "Documents/Elektrosjokk/data"
     pial_border = load_array("pial_points.txt", directory=data_directory)
@@ -132,13 +142,13 @@ def get_solver(brain) -> BidomainSplittingSolver:
     ode_solution = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_sol.npy"))
     ode_time = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_time.npy"))
 
-    print("Interpolate ic is very slow!")
-    interpolate_ic(ode_time, ode_solution, vs_prev, [pial_border[:, :2], wm_border[:, :2]], wavespeed=0.03)
-    vfoo, *_ = vs_prev.split(deepcopy=True)
-    with df.XDMFFile(df.MPI.comm_world, "new_meshes/initial_condition_visualisation.xdmf") as fieldfile:
-        fieldfile.write(vfoo, 0.0)
-    with df.XDMFFile(df.MPI.comm_world, "new_meshes/initial_condition.xdmf") as fieldfile:
-        fieldfile.write_checkpoint(vfoo, "initial_condition")
+    # print("Interpolate ic is very slow!")
+    # interpolate_ic(ode_time, ode_solution, vs_prev, [pial_border[:, :2], wm_border[:, :2]], wavespeed=0.03)
+    # vfoo, *_ = vs_prev.split(deepcopy=True)
+    # with df.XDMFFile(df.MPI.comm_world, "new_meshes/initial_condition_visualisation.xdmf") as fieldfile:
+    #     fieldfile.write(vfoo, 0.0)
+    # with df.XDMFFile(df.MPI.comm_world, "new_meshes/initial_condition.xdmf") as fieldfile:
+    #     fieldfile.write_checkpoint(vfoo, "initial_condition")
     return solver
 
 
