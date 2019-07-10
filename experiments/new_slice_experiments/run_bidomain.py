@@ -36,6 +36,8 @@ from postspec import (
     SaverSpec,
 )
 
+from extension_modules import load_module
+
 
 def load_array(name: str, directory: Union[Path, str] = "../data") -> np.ndarray:
     return np.loadtxt(str(Path(directory) / name), delimiter=",")
@@ -136,11 +138,15 @@ def get_solver(brain) -> BidomainSplittingSolver:
     vs_prev, *_ = solver.solution_fields()
     vs_prev.assign(brain.cell_model.initial_conditions())
 
-    data_directory = Path.home() / "Documents/Elektrosjokk/data"
-    pial_border = load_array("pial_points.txt", directory=data_directory)
-    wm_border = load_array("white_points.txt", directory=data_directory)
-    ode_solution = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_sol.npy"))
-    ode_time = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_time.npy"))
+    ######################################################################################
+    # I should try to be fancy with the assigning subdomain, rather than write the assign
+    # function myself.
+    ######################################################################################
+    # data_directory = Path.home() / "Documents/Elektrosjokk/data"
+    # pial_border = load_array("pial_points.txt", directory=data_directory)
+    # wm_border = load_array("white_points.txt", directory=data_directory)
+    # ode_solution = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_sol.npy"))
+    # ode_time = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_time.npy"))
 
     # print("Interpolate ic is very slow!")
     # interpolate_ic(ode_time, ode_solution, vs_prev, [pial_border[:, :2], wm_border[:, :2]], wavespeed=0.03)

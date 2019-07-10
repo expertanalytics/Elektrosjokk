@@ -60,50 +60,23 @@ class CoupledODESolver:
             verbose=self._parameters.reload_extension_modules
         )
 
-        dofmaps = [
-            self._function_space_VS.sub(i).dofmap() for i in range(self._function_space_VS.num_sub_spaces())
-        ]
+        # dofmaps = [
+        #     self._function_space_VS.sub(i).dofmap() for i in range(self._function_space_VS.num_sub_spaces())
+        # ]
 
-        if valid_cell_tags is None or cell_function is None:
-            self._dofs = [VectorInt(dofmap.dofs() for dofmap in dofmaps)]
-        else:
-            self._dofs = [
-                # masked_dofs(dofmap, cell_function.array(), valid_cell_tags) for dofmap in dofmaps
-                self.ode_module.filter_dofs(dofmap, cell_function, valid_cell_tags) for dofmap in dofmaps
-            ]
-
-        self.ode_solver = self.ode_module.LatticeODESolver(*self._dofs)
-
-        # vertex_function = df.MeshFunction("size_t", self._mesh, 0)
-        # for i, value in enumerate(cell_function.array()):
-        #     if value != 0:
-        #         vertex_function.array()[self._mesh.cells()[i]] = value
+        # if valid_cell_tags is None or cell_function is None:
+        #     self._dofs = [VectorInt(dofmap.dofs() for dofmap in dofmaps)]
+        # else:
+        #     self._dofs = [
+        #         # masked_dofs(dofmap, cell_function.array(), valid_cell_tags) for dofmap in dofmaps
+        #         self.ode_module.filter_dofs(dofmap, cell_function, valid_cell_tags) for dofmap in dofmaps
+        #     ]
 
         self.ode_solver = self.ode_module.LatticeODESolverSubDomain(
             self._function_space_VS._cpp_object,
             cell_function,
             {2: 4, 4: 8}
         )
-        from IPython import embed; embed()
-
-        """
-        result = self.ode_module.foobar(dofmaps[0], cell_function, [2, 4])
-        print(result)
-
-        import numpy as np
-        foo_cell_function = cell_function.array()[np.in1d(cell_function.array(), np.asarray([2, 4]))]
-
-        # cell_domain
-        self.ode_solver = self.ode_module.LatticeODESolverSubDomain(
-            *self._dofs,
-            foo_cell_function,
-            {2: 4, 4: 8}
-        )
-        print(np.asarray(self._dofs[0]).size)
-        print(foo_cell_function.size)
-        from IPython import embed; embed()
-        """
-        assert False
 
 
     def solution_fields(self) -> Tuple[df.Function, df.Function]:

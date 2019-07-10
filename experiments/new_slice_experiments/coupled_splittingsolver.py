@@ -133,6 +133,7 @@ class CoupledSplittingSolver(ABC):
         # self.ode_solver.step((t0, t))
         self.ode_solver.step(t0, t)
 
+        # TODO: This should be sued when using fenics ode solver!
         # self.vs_.assign(self.vs)
 
         # Compute tentative potentials vu = (v, u)
