@@ -120,14 +120,56 @@ def get_brain() -> CoupledBrainModel:
     return brain
 
 
+def compute_initial_condirions(brain, vs_prev, zero_tags):
+    mesh = brain._mesh
+    cell_function = brain._cell_function
+
+    dX = df.Measure("dx", domain=mesh, subdomain_data=cell_function)
+
+    V = df.FunctionSpace(mesh, "DG", 0)
+    u = df.TrialFunction(V)
+    v = df.TestFunction(V)
+    sol = df.Function(V)
+
+    value = brain.cell_model.default_initial_conditions()["V"]
+
+    F = 0
+    for tag in set(brain.cell_tags) - set(zero_tags):
+        F += -u*v*dX(tag) + df.Constant(value)*v*dX(tag)
+
+    a = df.lhs(F)
+    L = df.rhs(F)
+
+    A = df.assemble(a, keep_diagonal=True)
+    A.ident_zeros()
+    b = df.assemble(L)
+
+    solver = df.KrylovSolver("cg", "petsc_amg")
+    solver.set_operator(A)
+    solver.solve(sol.vector(), b)
+
+    VCG = df.FunctionSpace(mesh, "CG", 1)
+    v_new = df.Function(VCG)
+    v_new.interpolate(sol)
+
+    Vp = vs_prev.function_space().sub(0)
+    merger = df.FunctionAssigner(Vp, VCG)
+    merger.assign(vs_prev.sub(0), v_new)
+
+
 def get_solver(brain) -> BidomainSplittingSolver:
     parameters = CoupledSplittingSolverParameters()
     ode_parameters = CoupledODESolverParameters(
         valid_cell_tags=(2, 4),
         reload_extension_modules=False
     )
-    pde_parameters = CoupledBidomainParameters(linear_solver_type="direct")
+
+    pde_parameters = CoupledBidomainParameters(
+        linear_solver_type="direct",
+        restrict_tags={3}
+    )
     # pde_parameters = CoupledBidomainParameters()
+
     solver = BidomainSplittingSolver(
         brain=brain,
         parameters=parameters,
@@ -137,6 +179,7 @@ def get_solver(brain) -> BidomainSplittingSolver:
 
     vs_prev, *_ = solver.solution_fields()
     vs_prev.assign(brain.cell_model.initial_conditions())
+    compute_initial_condirions(brain, vs_prev, {3})
 
     ######################################################################################
     # I should try to be fancy with the assigning subdomain, rather than write the assign

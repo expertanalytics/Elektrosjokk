@@ -7,6 +7,7 @@ from typing import (
     Any,
     Iterator,
     Union,
+    Sequence,
 )
 
 from coupled_utils import (
@@ -32,7 +33,7 @@ class CoupledBidomainSolver:
         neumann_boundary_condition: Dict[int, df.Expression] = None,
         v_prev: df.Function = None,
         surface_to_volume_factor: Union[float, df.Constant] = None,
-        membrane_capacitance: Union[float, df.Constant] = None
+        membrane_capacitance: Union[float, df.Constant] = None,
     ) -> None:
         self._time = time
         self._mesh = mesh
@@ -59,8 +60,14 @@ class CoupledBidomainSolver:
         if set(cell_tags) != _cell_function_tags:       # If not equal
             msg = "Mismatching cell tags. Expected {}, got {}"
             raise ValueError(msg.format(set(cell_tags), _cell_function_tags))
-        self._cell_tags = cell_tags
+        self._cell_tags = set(cell_tags)
         self._cell_function = cell_function
+
+        restrict_tags = self._parameters.restrict_tags
+        if set(restrict_tags) >= self._cell_tags:
+            msg = "restrict tags ({})is not a subset of cell tags ({})"
+            raise ValueError(msg.format(set(restrict_tags), self._cell_tags))
+        self._restrict_tags = set(restrict_tags)
 
         # Check interface tags
         _interface_function_tags = {*set(interface_function.array()), None}
@@ -178,12 +185,13 @@ class CoupledBidomainSolver:
 
         # Loop over all domains
         G = Dt_v*v_test*dOmega()
-        for key in set(self._cell_tags):
+        for key in self._cell_tags - self._restrict_tags:
             G += df.inner(Mi[key]*df.grad(v_mid), df.grad(v_test))*dOmega(key)
-            G += df.inner(Mi[key]*df.grad(u), df.grad(v_test))*dOmega(key)
             G += df.inner(Mi[key]*df.grad(v_mid), df.grad(u_test))*dOmega(key)
-            G += df.inner((Mi[key] + Me[key])*df.grad(u), df.grad(u_test))*dOmega(key)
 
+        for key in self._cell_tags:
+            G += df.inner(Mi[key]*df.grad(u), df.grad(v_test))*dOmega(key)
+            G += df.inner((Mi[key] + Me[key])*df.grad(u), df.grad(u_test))*dOmega(key)
             # If Lagrangian multiplier
             if self._parameters.linear_solver_type == "direct":
                 G += (multiplier_test*u + multiplier*u_test)*dOmega(key)
@@ -256,9 +264,10 @@ class CoupledBidomainSolver:
             self._lhs, self._rhs = self.variational_forms(self._timestep)
 
             # Preassemble left-hand side and initialize right-hand side vector
-            self._lhs_matrix = df.assemble(self._lhs)
+            self._lhs_matrix = df.assemble(self._lhs, keep_diagonal=True)
             self._rhs_vector = df.Vector(self._mesh.mpi_comm(), self._lhs_matrix.size(0))
             self._lhs_matrix.init_vector(self._rhs_vector, 0)
+            self._lhs_matrix.ident_zeros()
 
             # Create linear solver (based on parameter choices)
             self._linear_solver = self._create_linear_solver()

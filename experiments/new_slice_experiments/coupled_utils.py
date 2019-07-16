@@ -8,6 +8,7 @@ from typing import (
     Sequence,
     Iterator,
     Tuple,
+    Any
 )
 
 from xalode import VectorInt
@@ -39,6 +40,7 @@ class CoupledMonodomainParameters(NamedTuple):
 
 
 class CoupledBidomainParameters(NamedTuple):
+    restrict_tags: Any = set()
     timestep: df.Constant = df.Constant(1.0)
     theta: df.Constant = df.Constant(0.5)
     linear_solver_type: str = "direct"
