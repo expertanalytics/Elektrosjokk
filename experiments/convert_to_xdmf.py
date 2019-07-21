@@ -32,6 +32,7 @@ def parse_gmsh_mesh(mesh: meshio.Mesh, unify=False, dim=2) -> MeshData:
     """Extract data structures from meshio. This is gmsh specific."""
     if unify:
         print("Unifying tags according to rule.")
+
     _points = mesh.points[:, :dim]
     _cells = {"triangle": mesh.cells["triangle"]}
     try:
@@ -88,11 +89,20 @@ def test_fenics_read(directory, name):
 
 
 if __name__ == "__main__":
-    input_name = "new_slice_experiments/new_meshes/skullgmwm.msh"
-    mesh = meshio.read(input_name)
+    from pathlib import Path
+
+    mesh_dircetory = Path("new_slice_experiments/idealised_meshes")
+
+    input_name = "new_slice_experiments/new_meshes/skullgmwm_fine.msh"
+    output_name = "new_slice_experiments/new_meshes/skullgmwm_fine"
+
+    # for i in range(1, 5):
+    # input_name = mesh_dircetory / "idealised{}.msh".format(i)
+    # print(input_name)
+    # output_name = mesh_dircetory / "idealised{}".format(i)
+    mesh = meshio.read(str(input_name))
     mesh_data = parse_gmsh_mesh(mesh, unify=False)
 
-    output_name = "new_slice_experiments/new_meshes/skullgmwm"
     write_mesh(mesh_data.points, mesh_data.cells, output_name)
     write_mesh_function(mesh_data.points, mesh_data.cells, mesh_data.cell_data, f"{output_name}_cf")
     write_mesh_function(mesh_data.points, mesh_data.lines, mesh_data.facet_data, f"{output_name}_ff")

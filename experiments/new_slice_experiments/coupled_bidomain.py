@@ -266,7 +266,7 @@ class CoupledBidomainSolver:
             # Preassemble left-hand side and initialize right-hand side vector
             self._lhs_matrix = df.assemble(self._lhs, keep_diagonal=True)
             self._rhs_vector = df.Vector(self._mesh.mpi_comm(), self._lhs_matrix.size(0))
-            self._lhs_matrix.init_vector(self._rhs_vector, 0)
+            # self._lhs_matrix.init_vector(self._rhs_vector, 0)
             self._lhs_matrix.ident_zeros()
 
             # Create linear solver (based on parameter choices)

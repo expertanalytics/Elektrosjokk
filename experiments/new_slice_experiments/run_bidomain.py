@@ -6,7 +6,11 @@ from typing import Union
 from scipy import signal
 from math import pi
 
-from postfields import Field
+from postfields import (
+    Field,
+    PointField,
+)
+
 from post import Saver
 from coupled_brainmodel import CoupledBrainModel
 from coupled_splittingsolver import BidomainSplittingSolver
@@ -15,6 +19,7 @@ from postutils import (
     interpolate_ic,
     store_sourcefiles,
     simulation_directory,
+    circle_points,
 )
 
 from xalbrain.cellmodels import (
@@ -45,7 +50,7 @@ def load_array(name: str, directory: Union[Path, str] = "../data") -> np.ndarray
 
 def get_brain() -> CoupledBrainModel:
     time_constant = df.Constant(0)
-    mesh, cell_function, interface_function = get_mesh("new_meshes", "skullgmwm")
+    mesh, cell_function, interface_function = get_mesh("new_meshes", "skullgmwm_fine")
 
     test_cell_function = df.MeshFunction("size_t", mesh, mesh.geometric_dimension())
     test_cell_function.set_all(0)
@@ -113,7 +118,7 @@ def get_brain() -> CoupledBrainModel:
         interface_tags=interface_tags,
         intracellular_conductivity=Mi_dict,
         other_conductivity=Me_dict,         # Either lmbda or extracellular
-        neumann_boundary_condition=neumann_bc_dict,
+        # neumann_boundary_condition=neumann_bc_dict,
         surface_to_volume_factor=Chi,
         membrane_capacitance=Cm
     )
@@ -165,8 +170,7 @@ def get_solver(brain) -> BidomainSplittingSolver:
     )
 
     pde_parameters = CoupledBidomainParameters(
-        linear_solver_type="direct",
-        restrict_tags={3}
+        linear_solver_type="direct"
     )
     # pde_parameters = CoupledBidomainParameters()
 
@@ -211,6 +215,7 @@ def get_saver(
         "coupled_odesolver.py",
         "coupled_splittingsolver.py",
         "coupled_utils.py",
+        "run_bidomain.py"
     ]
     store_sourcefiles(map(Path, sourcefiles), outpath)
 
@@ -224,6 +229,22 @@ def get_saver(
 
     field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=40*1000)
     saver.add_field(Field("vs", field_spec_checkpoint))
+
+    point_list = (
+        # K8
+        (38.95, 59.43),
+        (35.75, 67.66),
+        (26.97, 75.30),
+        # K4
+        (-16.59, 78.77),
+        (-48.33, 48.47),
+        (-27.66, 38.53)
+    )
+
+    point_field_spec = FieldSpec(stride_timestep=1)
+    for i, centre in enumerate(point_list):
+        points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
+        saver.add_field(PointField("psd_v{}".format(i), point_field_spec, points))
     return saver
 
 
@@ -245,7 +266,9 @@ if __name__ == "__main__":
         update_dict = {
             "v": v,
             "u": u,
-            "vs": solution_struct.vs,
+            "psd_v0": v,
+            "psd_v1": v,
+            "psd_v2": v,
         }
         saver.update(brain.time, i, update_dict)
     saver.close()
