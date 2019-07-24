@@ -1,5 +1,4 @@
-""" Write an xdmf file for use in FEniCS.
-
+""" Write an xdmf file for use in FEniCS.  
 Thanks to J. S. Dokken for help with this script.
 
 https://fenicsproject.discourse.group/t/transitioning-from-mesh-xml-to-mesh-xdmf-from-dolfin-convert-to-meshio/412/9
@@ -91,20 +90,20 @@ def test_fenics_read(directory, name):
 if __name__ == "__main__":
     from pathlib import Path
 
-    mesh_dircetory = Path("new_slice_experiments/idealised_meshes")
+    mesh_dircetory = Path("idealised_experiments/idealised_meshes")
 
-    input_name = "new_slice_experiments/new_meshes/skullgmwm_fine.msh"
-    output_name = "new_slice_experiments/new_meshes/skullgmwm_fine"
+    # input_name = "new_slice_experiments/new_meshes/skullgmwm_fine1.msh"
+    # output_name = "new_slice_experiments/new_meshes/skullgmwm_fine1"
 
-    # for i in range(1, 5):
-    # input_name = mesh_dircetory / "idealised{}.msh".format(i)
-    # print(input_name)
-    # output_name = mesh_dircetory / "idealised{}".format(i)
-    mesh = meshio.read(str(input_name))
-    mesh_data = parse_gmsh_mesh(mesh, unify=False)
+    for i in range(1, 9):
+        input_name = mesh_dircetory / "idealised{}.msh".format(i)
+        print(input_name)
+        output_name = mesh_dircetory / "idealised{}".format(i)
+        mesh = meshio.read(str(input_name))
+        mesh_data = parse_gmsh_mesh(mesh, unify=False)
 
-    write_mesh(mesh_data.points, mesh_data.cells, output_name)
-    write_mesh_function(mesh_data.points, mesh_data.cells, mesh_data.cell_data, f"{output_name}_cf")
-    write_mesh_function(mesh_data.points, mesh_data.lines, mesh_data.facet_data, f"{output_name}_ff")
+        write_mesh(mesh_data.points, mesh_data.cells, output_name)
+        write_mesh_function(mesh_data.points, mesh_data.cells, mesh_data.cell_data, f"{output_name}_cf")
+        # write_mesh_function(mesh_data.points, mesh_data.lines, mesh_data.facet_data, f"{output_name}_ff")
 
-    # test_fenics_read("foo", "test")
+        # test_fenics_read("foo", "test")
