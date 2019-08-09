@@ -91,11 +91,21 @@ def compute_initial_condirions(brain, vs_prev, zero_tags):
 
 def get_brain(i) -> CoupledBrainModel:
     time_constant = df.Constant(0)
-    mesh, cell_function, interface_function = get_mesh("idealised_meshes", "idealised{i}".format(i=i))
+    mesh, cell_function, interface_function = get_mesh("new_idealised_meshes", "idealised{i}".format(i=i))
 
+    kbath_area_dict = {
+        1: (0, 0.33),
+        2: (0.4, 0.132),
+        3: (1.2, 0.3),
+        4: (2.8, 0.92)
+    }
+
+    a, b = kbath_area_dict[i]
     test_cell_function = df.MeshFunction("size_t", mesh, mesh.geometric_dimension())
     test_cell_function.set_all(0)
-    df.CompiledSubDomain("x[0] > -0.33 && x[0] < 0.33").mark(test_cell_function, 4)
+    df.CompiledSubDomain(
+        "x[0] - a*x[1] - b <= 0 && x[0] + a*x[1] + b >= 0", a=a, b=b
+    ).mark(test_cell_function, 4)
 
     # Hack?
     cell_function.array()[(cell_function.array() == 2) & (test_cell_function.array() == 4)] = 4
@@ -161,8 +171,9 @@ def get_solver(brain) -> BidomainSplittingSolver:
 
 
 def get_saver(
-        brain: CoupledBrainModel,
-        outpath: Union[str, Path]
+    brain: CoupledBrainModel,
+    outpath: Union[str, Path],
+    case_index: int
 ) -> Saver:
     sourcefiles = [
         "coupled_bidomain.py",
@@ -178,31 +189,36 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh)
 
-    field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=40)
+    field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=40)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=40*1000)
+    field_spec_checkpoint = FieldSpec(save_as=("hdf5"), stride_timestep=40*1000)
     saver.add_field(Field("vs", field_spec_checkpoint))
 
-    point_list = (
-        # K8
-        (0.5, 0.5),
-        (0.6, 0.6),
-        (0.4, 0.6),
-        # K8
-        (0.5, 0.3),
-        (0.5, 0.9),
-        # WM
-        (0.2, 0.5),
-        # CSF
-        (0.8, 0.5)
-    )
+    gm_pl_dict = {
+        1: ((-0.8, 0), (-0.6, 0), (-0.4, 0), (-0.2, 0), (0, 0), (0.2, 0), (0.4, 0), (0.6, 0), (0.8, 0)),
+        2: ((-0.8, -0.02), (-0.6, 0.15), (-0.4, 0.25), (-0.2, 0.32), (0, 0.35), (0.2, 0.32), (0.4, 0.25), (0.6, 0.15), (0.8, -0.02)),
+        3: ((-0.8, -0.2), (-0.6, 0.16), (-0.4, 0.4), (-0.2, 0.55), (0, 0.6), (0.2, 0.55), (0.4, 0.4), (0.6, 0.16), (0.8, -0.2)),
+        4: ((-0.62, -0.9), (-0.5, -0.6), (-0.4, -0.3), (-0.3, 0), (-0.2, 0.35), (0, 0.55), (0.2, 0.35), (0.3, -0.3), (0.4, -0.3), (0.5, -0.6), (-0.62, -0.9))
+    }
+    csf_pl_dict = {k: map(lambda p: (p[0], p[1] + 0.4), gm_pl_dict[k]) for k in gm_pl_dict}
+    wm_pl_dict = {k: map(lambda p: (p[0], p[1] - 0.4), gm_pl_dict[k]) for k in gm_pl_dict}
 
-    point_field_spec = FieldSpec(stride_timestep=1)
-    for i, centre in enumerate(point_list):
+    point_field_spec = FieldSpec(stride_timestep=40)
+    for i, centre in enumerate(gm_pl_dict[case_index]):
         points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
         saver.add_field(PointField("psd_v{}".format(i), point_field_spec, points))
+        saver.add_field(PointField("psd_u{}".format(i), point_field_spec, points))
+
+    for i, centre in enumerate(csf_pl_dict[case_index]):
+        points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
+        saver.add_field(PointField("psd_csf{}".format(i), point_field_spec, points))
+
+    for i, centre in enumerate(wm_pl_dict[case_index]):
+        points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
+        saver.add_field(PointField("psd_wmv{}".format(i), point_field_spec, points))
+        saver.add_field(PointField("psd_wmu{}".format(i), point_field_spec, points))
     return saver
 
 
@@ -211,44 +227,47 @@ if __name__ == "__main__":
 
     from multiprocessing import Pool
 
-    def run(i):
-        N = 300
+    def run(case_id):
         T = 1e1
         dt = 0.025
 
-        brain = get_brain(i)
+        brain = get_brain(case_id)
         solver = get_solver(brain)
 
         identifier = simulation_directory(
-            parameters={"time": datetime.datetime.now(), "i": i},
-            directory_name=".simulations/idealised"
+            parameters={"time": datetime.datetime.now(), "case_id": case_id},
+            directory_name=".simulations/new_idealised"
         )
 
-        saver = get_saver(brain, identifier)
+        num_pl_dict = {1: 9, 2: 0, 3: 9, 4: 11}
+        _n = num_pl_dict[case_id]
+
+        saver = get_saver(brain, identifier, case_id)
+        v_field_names = ["v"] +  [f"psd_v{n}" for n in range(_n)] + [f"psd_wmv{n}" for n in range(_n)]
+        u_field_names = ["u"] + [f"psd_u{i}" for i in range(_n)] + [f"psd_wmu{i}" for i in range(_n)]
+        u_field_names += [f"psd_csf{i}" for i in range(_n)]
+        vs_field_names = ["vs"]
+        field_names = v_field_names + u_field_names + vs_field_names
 
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         tick = time.perf_counter()
         for i, solution_struct in enumerate(solver.solve(0, T, dt)):
             print(f"{i} -- {brain.time(0)} -- {solution_struct.vur.vector().norm('l2')}")
-            v, u, *_ = solution_struct.vur.split(deepcopy=True)
-            update_dict = {
-                "v": v,
-                "u": u,
-                "psd_v0": v,
-                "psd_v1": v,
-                "psd_v2": v,
-                "psd_v3": v,
-                "psd_v4": v,
-                "psd_v5": v,
-                "psd_v6": v,
-            }
-            saver.update(brain.time, i, update_dict)
+
+            if saver.update_this_timestep(field_names=["v"], timestep=i, time=brain.time(0)):
+                print("saving")
+                v, u, *_ = solution_struct.vur.split(deepcopy=True)
+                update_dict = {name: v for name in v_field_names}
+                update_dict.update({name: u for name in u_field_names})
+                update_dict.update({name: solution_struct.vs for name in vs_field_names})
+                saver.update(brain.time, i, update_dict)
+
         saver.close()
         tock = time.perf_counter()
         max_memory_usage = resource_usage.ru_maxrss/1e6  # Kb to Gb
         print("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
         print("Execution time: {:.2f} s".format(tock - tick))
 
-    parameter_list = [1, 2, 3, 4, 5, 6, 7, 8]
+    parameter_list = [1, 2, 3, 4]
     pool = Pool(processes=len(parameter_list))
     pool.map(run, parameter_list)

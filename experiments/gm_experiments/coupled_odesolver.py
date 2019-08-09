@@ -29,6 +29,7 @@ class CoupledODESolver:
             cell_model: CardiacCellModel,
             parameters: CoupledODESolverParameters,
             cell_function: df.MeshFunction,
+            parameter_map: Dict[int, float] = None
     ) -> None:
         """Initialise parameters. NB! Keep I_s for compatibility"""
         # Store input
@@ -60,10 +61,13 @@ class CoupledODESolver:
             verbose=self._parameters.reload_extension_modules
         )
 
+        if parameter_map is None:
+            print("using bath = 4 everywhere!")
+            parameter_map = {k: 4 for k in valid_cell_tags}
         self.ode_solver = self.ode_module.LatticeODESolverSubDomain(
             self._function_space_VS._cpp_object,
             cell_function,
-            {2: 4, 4: 8}
+            parameter_map
         )
 
 

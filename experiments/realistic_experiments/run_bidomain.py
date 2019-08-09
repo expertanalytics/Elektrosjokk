@@ -1,3 +1,6 @@
+import time
+import datetime
+
 import dolfin as df
 import numpy as np
 
@@ -50,7 +53,7 @@ def load_array(name: str, directory: Union[Path, str] = "../data") -> np.ndarray
 
 def get_brain() -> CoupledBrainModel:
     time_constant = df.Constant(0)
-    mesh, cell_function, interface_function = get_mesh("realistic_meshes", "skullgmwm")
+    mesh, cell_function, interface_function = get_mesh("realistic_meshes", "skullgmwm_fine1")
 
     test_cell_function = df.MeshFunction("size_t", mesh, mesh.geometric_dimension())
     test_cell_function.set_all(0)
@@ -61,9 +64,6 @@ def get_brain() -> CoupledBrainModel:
 
     cell_tags = CellTags(CSF=3, GM=2, WM=1, Kinf=4)
     interface_tags = InterfaceTags(skull=3, CSF_GM=2, GM_WM=1, CSF=None, GM=None, WM=None)
-    # mesh, cell_function, interface_function = get_mesh("meshes", "fine_all")
-    # cell_tags = CellTags()
-    # interface_tags = InterfaceTags()
 
     Chi = 1.26e3      # 1/cm -- Dougherty 2015
     Cm = 1.0          # muF/cm^2 -- Dougherty 2015
@@ -139,7 +139,7 @@ def compute_initial_condirions(brain, vs_prev, zero_tags):
     value = brain.cell_model.default_initial_conditions()["V"]
 
     F = 0
-    for tag in set(brain.cell_tags) - set(zero_tags):
+    for tag in set(brain.cell_tags) - {*zero_tags} - {None}:
         F += -u*v*dX(tag) + df.Constant(value)*v*dX(tag)
 
     a = df.lhs(F)
@@ -165,7 +165,8 @@ def compute_initial_condirions(brain, vs_prev, zero_tags):
 def get_solver(brain) -> BidomainSplittingSolver:
     parameters = CoupledSplittingSolverParameters()
     ode_parameters = CoupledODESolverParameters(
-        valid_cell_tags=(2, 4),
+        # valid_cell_tags=(2, 4),
+        valid_cell_tags=(2,),
         reload_extension_modules=False
     )
 
@@ -209,6 +210,10 @@ def get_saver(
         brain: CoupledBrainModel,
         outpath: Union[str, Path]
 ) -> Saver:
+    saver_parameters = SaverSpec(casedir=outpath, overwrite_casedir=True)
+    saver = Saver(saver_parameters)
+    saver.store_mesh(brain.mesh)
+
     sourcefiles = [
         "coupled_bidomain.py",
         "coupled_brainmodel.py",
@@ -217,34 +222,48 @@ def get_saver(
         "coupled_utils.py",
         "run_bidomain.py"
     ]
+
     store_sourcefiles(map(Path, sourcefiles), outpath)
 
-    saver_parameters = SaverSpec(casedir=outpath, overwrite_casedir=True)
-    saver = Saver(saver_parameters)
-    saver.store_mesh(brain.mesh)
-
-    field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=40)
+    field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=10)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    field_spec_checkpoint = FieldSpec(save_as=("xdmf"), stride_timestep=40*1000)
+    field_spec_checkpoint = FieldSpec(save_as=("hdf5"), stride_timestep=40*1000)
     saver.add_field(Field("vs", field_spec_checkpoint))
 
     point_list = (
         # K8
-        (38.95, 59.43),
-        (35.75, 67.66),
-        (26.97, 75.30),
+        (-38.95, 59.43),
+        (-35.75, 67.66),
+        (-26.97, 75.30),
         # K4
         (-16.59, 78.77),
         (-48.33, 48.47),
         (-27.66, 38.53)
     )
 
+    edge_points = (
+       (-52.34, 46.96),
+       (-48.38, 56.68),
+       (-44.91, 62.43),
+       (-39.65, 70.66),
+       (-35.89, 73.83),
+       (-30.43, 79.78),
+       (-22.40, 82.73),
+       (-16.35, 84.89)
+    )
+
     point_field_spec = FieldSpec(stride_timestep=1)
     for i, centre in enumerate(point_list):
         points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
         saver.add_field(PointField("psd_v{}".format(i), point_field_spec, points))
+        saver.add_field(PointField("psd_u{}".format(i), point_field_spec, points))
+
+    for i, centre in enumerate(edge_points):
+        points = circle_points(radii=[0, 0.1], num_points=[1, 6], r0=centre)
+        saver.add_field(PointField("psd_csf{}".format(i), point_field_spec, points))
+
     return saver
 
 
@@ -252,23 +271,26 @@ if __name__ == "__main__":
     brain = get_brain()
     solver = get_solver(brain)
 
-    import datetime
     identifier = simulation_directory(
         parameters={"time": datetime.datetime.now()},
-        directory_name=".simulations/realistic"
+        directory_name=".simulations/test"
     )
 
     saver = get_saver(brain, identifier)
+    v_field_names = ["v", "psd_v0", "psd_v1", "psd_v2", "psd_v3", "psd_v4", "psd_v5"]
+    u_field_names = ["u"] + [f"psd_u{i}" for i in range(6)] + [f"psd_csf{i}" for i in range(8)]
+    field_names = v_field_names + u_field_names
 
-    for i, solution_struct in enumerate(solver.solve(0, 5e2, 0.025)):
-        print(f"{i} -- {brain.time(0)} -- {solution_struct.vur.vector().norm('l2')}")
-        v, u, *_ = solution_struct.vur.split(deepcopy=True)
-        update_dict = {
-            "v": v,
-            "u": u,
-            "psd_v0": v,
-            "psd_v1": v,
-            "psd_v2": v,
-        }
-        saver.update(brain.time, i, update_dict)
+    tick = time.perf_counter()
+    for i, solution_struct in enumerate(solver.solve(0, 1e1, 0.025)):
+        print(f"{i} -- {brain.time(0):.5f} -- {solution_struct.vur.vector().norm('l2'):.6e}")
+
+        if saver.update_this_timestep(field_names=["v"], timestep=i, time=brain.time(0)):
+            print("saving")
+            v, u, *_ = solution_struct.vur.split(deepcopy=True)
+            update_dict = {name: v for name in v_field_names}
+            update_dict.update({name: u for name in u_field_names})
+            saver.update(brain.time, i, update_dict)
     saver.close()
+    tock = time.perf_counter()
+    print(tock - tick)
