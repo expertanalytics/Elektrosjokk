@@ -203,6 +203,19 @@ class CoupledBidomainSolver:
             # Default to 0 if not defined for tag
             G += self._neumann_bc.get(key, df.Constant(0))*u_test*dGamma(key)
 
+        # Interface conditions
+        csf_gm = 2
+        gm_wm = 1
+        csf = 3
+        gm = 2
+        wm = 1
+
+        csf_gm_interface = df.inner((Me[gm] - Me[csf])*df.grad(u), df.grad(u_test))*dGamma(csf_gm)
+        gm_wm_interface = df.inner((Me[gm] - Me[wm])*df.grad(u), df.grad(u_test))*dGamma(gm_wm)
+
+        G += csf_gm_interface
+        G += gm_wm_interface
+
         a, L = df.system(G)
         return a, L
 

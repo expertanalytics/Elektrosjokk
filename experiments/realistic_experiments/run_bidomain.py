@@ -173,7 +173,6 @@ def get_solver(brain) -> BidomainSplittingSolver:
     pde_parameters = CoupledBidomainParameters(
         linear_solver_type="direct"
     )
-    # pde_parameters = CoupledBidomainParameters()
 
     solver = BidomainSplittingSolver(
         brain=brain,
@@ -185,24 +184,6 @@ def get_solver(brain) -> BidomainSplittingSolver:
     vs_prev, *_ = solver.solution_fields()
     vs_prev.assign(brain.cell_model.initial_conditions())
     compute_initial_condirions(brain, vs_prev, {3})
-
-    ######################################################################################
-    # I should try to be fancy with the assigning subdomain, rather than write the assign
-    # function myself.
-    ######################################################################################
-    # data_directory = Path.home() / "Documents/Elektrosjokk/data"
-    # pial_border = load_array("pial_points.txt", directory=data_directory)
-    # wm_border = load_array("white_points.txt", directory=data_directory)
-    # ode_solution = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_sol.npy"))
-    # ode_time = np.load(str(Path.home() / "Documents/Elektrosjokk/data/ic_time.npy"))
-
-    # print("Interpolate ic is very slow!")
-    # interpolate_ic(ode_time, ode_solution, vs_prev, [pial_border[:, :2], wm_border[:, :2]], wavespeed=0.03)
-    # vfoo, *_ = vs_prev.split(deepcopy=True)
-    # with df.XDMFFile(df.MPI.comm_world, "new_meshes/initial_condition_visualisation.xdmf") as fieldfile:
-    #     fieldfile.write(vfoo, 0.0)
-    # with df.XDMFFile(df.MPI.comm_world, "new_meshes/initial_condition.xdmf") as fieldfile:
-    #     fieldfile.write_checkpoint(vfoo, "initial_condition")
     return solver
 
 
@@ -225,11 +206,11 @@ def get_saver(
 
     store_sourcefiles(map(Path, sourcefiles), outpath)
 
-    field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=10)
+    field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=20)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    field_spec_checkpoint = FieldSpec(save_as=("hdf5"), stride_timestep=40*1000)
+    field_spec_checkpoint = FieldSpec(save_as=("hdf5"), stride_timestep=20*1000)
     saver.add_field(Field("vs", field_spec_checkpoint))
 
     point_list = (
@@ -254,15 +235,19 @@ def get_saver(
        (-16.35, 84.89)
     )
 
-    point_field_spec = FieldSpec(stride_timestep=1)
+    point_field_spec = FieldSpec(stride_timestep=20, sub_field_index=0)
     for i, centre in enumerate(point_list):
         points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
-        saver.add_field(PointField("psd_v{}".format(i), point_field_spec, points))
-        saver.add_field(PointField("psd_u{}".format(i), point_field_spec, points))
+        saver.add_field(PointField("trace_v{}".format(i), point_field_spec, points))
+
+    point_field_spec = FieldSpec(stride_timestep=20, sub_field_index=1)
+    for i, centre in enumerate(point_list):
+        points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
+        saver.add_field(PointField("trace_u{}".format(i), point_field_spec, points))
 
     for i, centre in enumerate(edge_points):
         points = circle_points(radii=[0, 0.1], num_points=[1, 6], r0=centre)
-        saver.add_field(PointField("psd_csf{}".format(i), point_field_spec, points))
+        saver.add_field(PointField("trace_csf{}".format(i), point_field_spec, points))
 
     return saver
 
@@ -273,24 +258,29 @@ if __name__ == "__main__":
 
     identifier = simulation_directory(
         parameters={"time": datetime.datetime.now()},
-        directory_name=".simulations/test"
+        directory_name=".simulations/realistic"
     )
 
     saver = get_saver(brain, identifier)
-    v_field_names = ["v", "psd_v0", "psd_v1", "psd_v2", "psd_v3", "psd_v4", "psd_v5"]
-    u_field_names = ["u"] + [f"psd_u{i}" for i in range(6)] + [f"psd_csf{i}" for i in range(8)]
-    field_names = v_field_names + u_field_names
+    traces = [f"trace_v{i}" for i in range(6)]
+    traces += [f"trace_u{i}" for i in range(6)]
+    traces += [f"trace_csf{i}" for i in range(8)]
 
     tick = time.perf_counter()
-    for i, solution_struct in enumerate(solver.solve(0, 1e1, 0.025)):
+    for i, solution_struct in enumerate(solver.solve(0, 1e3, 0.05)):
         print(f"{i} -- {brain.time(0):.5f} -- {solution_struct.vur.vector().norm('l2'):.6e}")
 
-        if saver.update_this_timestep(field_names=["v"], timestep=i, time=brain.time(0)):
-            print("saving")
+        update_dict = dict()
+        if saver.update_this_timestep(field_names=traces, timestep=i, time=brain.time(0)):
+            update_dict = {k: solution_struct.vur for k in traces}
+
+        if saver.update_this_timestep(field_names=["v", "u"], timestep=i, time=brain.time(0)):
             v, u, *_ = solution_struct.vur.split(deepcopy=True)
-            update_dict = {name: v for name in v_field_names}
-            update_dict.update({name: u for name in u_field_names})
+            update_dict.update({"v": v, "u": u})
+
+        if len(update_dict) != 0:
             saver.update(brain.time, i, update_dict)
+
     saver.close()
     tock = time.perf_counter()
     print(tock - tick)
