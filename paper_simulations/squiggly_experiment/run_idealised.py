@@ -283,7 +283,7 @@ if __name__ == "__main__":
         print("got solver")
 
         identifier = simulation_directory(
-            home=path(".")
+            home=path("."),
             parameters={
                  "time": datetime.datetime.now(),
                  "case_id": case_id,
