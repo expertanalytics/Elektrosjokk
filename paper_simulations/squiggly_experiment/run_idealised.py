@@ -11,6 +11,7 @@ import numpy as np
 from pathlib import Path
 from scipy import signal
 from math import pi
+from multiprocessing import Pool
 
 from postfields import (
     Field,
@@ -246,21 +247,31 @@ def get_saver(
     field_spec_checkpoint = FieldSpec(save_as=("hdf5"), stride_timestep=20*1000)
     saver.add_field(Field("vs", field_spec_checkpoint))
 
-    points = [[i, 0] for i in range(1, 10)]
+    trace_names = []
+    r = np.linspace(-9, 9, )
+    points = np.zeros(shape=(r.size, 2))
+    for sub_index in range(7):
+        point_field_spec = FieldSpec(stride_timestep=20, sub_field_index=sub_index)
+        for theta in [1, 5, 9, 13]:
+            points[:, 0] = r*np.cos(theta)
+            points[:, 1] = r*np.sin(theta)
+            name = "trace{}_{}".format(sub_index, theta)
+            saver.add_field(PointField(name, point_field_spec, points))
+            trace_names.append(name)
 
-    point_field_spec_v = FieldSpec(stride_timestep=20, sub_field_index=0)
-    point_field_spec_u = FieldSpec(stride_timestep=20, sub_field_index=1)
+            angular_offset = pi/8
+            points[:, 0] = r*np.cos(theta + angular_offset)
+            points[:, 1] = r*np.sin(theta + angular_offset)
+            name = "trace_offset{}_{}".format(sub_index, theta)
+            saver.add_field(PointField(name, point_field_spec, points))
+            trace_names.append(name)
 
-    saver.add_field(PointField("trace_u", point_field_spec_u, points))
-    saver.add_field(PointField("trace_v", point_field_spec_v, points))
-
-    return saver
+    return saver, trace_names
 
 
 if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
-    from multiprocessing import Pool
 
     def run(args):
         conductivity, case_id, Ks, Ku = args
@@ -272,24 +283,26 @@ if __name__ == "__main__":
         print("got solver")
 
         identifier = simulation_directory(
+            home=Path.home(),
             parameters={"time": datetime.datetime.now(), "case_id": case_id},
-            directory_name=".simulations/squiggly"
+            directory_name=Path(".simulations/squiggly")
         )
 
-        saver = get_saver(brain, identifier, case_id)
-        print("got saver")
+        saver, trace_name_list = get_saver(brain, identifier, case_id)
 
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         tick = time.perf_counter()
-        uv_field_names = ["v", "u", "trace_u", "trace_v"]
-        print(uv_field_names)
+
         for i, solution_struct in enumerate(solver.solve(0, T, dt)):
             print(f"{i} -- {brain.time(0):.5f} -- {solution_struct.vur.vector().norm('l2'):.6e}")
 
             update_dict = dict()
-            if saver.update_this_timestep(field_names=uv_field_names, timestep=i, time=brain.time(0)):
+            if saver.update_this_timestep(field_names=["u", "v"], timestep=i, time=brain.time(0)):
                 v, u, *_ = solution_struct.vur.split(deepcopy=True)
                 update_dict.update({"v": v, "u": u})
+
+            if saver.update_this_timestep(field_names=trace_name_list, timestep=i, time=brain.time(0)):
+                update_dict.update({k: solution_struct.vs for k in trace_name_list})
 
             if saver.update_this_timestep(field_names=["vs"], timestep=i, time=brain.time(0)):
                 update_dict.update({"vs": solution_struct.vs})
@@ -310,6 +323,7 @@ if __name__ == "__main__":
     Ku = float(sys.argv[2])
 
     parameter_list = list(itertools.product(conductivities, lengths, [Ks], [Ku]))
+    parameter_list = parameter_list[:2]
 
     pool = Pool(processes=len(parameter_list))
     pool.map(run, parameter_list)
