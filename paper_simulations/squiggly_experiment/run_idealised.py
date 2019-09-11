@@ -248,8 +248,8 @@ def get_saver(
 
     points = [[i, 0] for i in range(1, 10)]
 
-    point_field_spec_v = FieldSpec(stride_timestep=20, sub_field_index=0)
-    point_field_spec_u = FieldSpec(stride_timestep=20, sub_field_index=1)
+    point_field_spec_v = FieldSpec(stride_timestep=4, sub_field_index=0)
+    point_field_spec_u = FieldSpec(stride_timestep=4, sub_field_index=1)
 
     saver.add_field(PointField("trace_u", point_field_spec_u, points))
     saver.add_field(PointField("trace_v", point_field_spec_v, points))
@@ -272,17 +272,21 @@ if __name__ == "__main__":
         print("got solver")
 
         identifier = simulation_directory(
-            parameters={"time": datetime.datetime.now(), "case_id": case_id},
-            directory_name=".simulations/squiggly"
+            parameters={
+                "time": datetime.datetime.now(),
+                 "case_id": case_id,
+                 "conductivity": conductivity,
+                 "Ks": Ks,
+                 "Ku": Ku
+            },
+            directory_name="squiggly"
         )
 
         saver = get_saver(brain, identifier, case_id)
-        print("got saver")
 
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         tick = time.perf_counter()
         uv_field_names = ["v", "u", "trace_u", "trace_v"]
-        print(uv_field_names)
         for i, solution_struct in enumerate(solver.solve(0, T, dt)):
             print(f"{i} -- {brain.time(0):.5f} -- {solution_struct.vur.vector().norm('l2'):.6e}")
 
@@ -293,6 +297,9 @@ if __name__ == "__main__":
 
             if saver.update_this_timestep(field_names=["vs"], timestep=i, time=brain.time(0)):
                 update_dict.update({"vs": solution_struct.vs})
+
+            if saver.update_this_timestep(field_names=["trace_u", "trace_v"], timestep=i, time=brain.time()):
+                update_dict.update({"trace_u": solution_struct.vur, "trace_v": solution_struct.vur})
 
             if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)
@@ -305,6 +312,9 @@ if __name__ == "__main__":
 
     conductivities = [2**(2*n) for n in range(-3, 2)]
     lengths = list(range(3))
+
+    conductivities = [1, 2]
+    lengths = [1]
 
     Ks = float(sys.argv[1])
     Ku = float(sys.argv[2])

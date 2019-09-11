@@ -153,7 +153,7 @@ def get_saver(
     field_spec_checkpoint = FieldSpec(save_as=("hdf5"), stride_timestep=20*1000)
     saver.add_field(Field("vs", field_spec_checkpoint))
 
-    point_field_spec = FieldSpec(stride_timestep=1, sub_field_index=0)
+    point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)
     points = np.zeros((9, 2))
     points[:, 0] = np.linspace(0.1, 0.9, 9)
     saver.add_field(PointField("trace_v", point_field_spec, points))
@@ -169,15 +169,22 @@ if __name__ == "__main__":
     def run(args):
         conductivity, case_id, Ks, Ku = args
         # Ks, Ku, case_id = args
-        T = 1e2
+        T = 1e1
         dt = 0.05
 
         brain = get_brain(case_id, conductivity)
         solver = get_solver(brain, Ks, Ku)
 
         identifier = simulation_directory(
-            parameters={"time": datetime.datetime.now(), "case_id": case_id},
-            directory_name=".simulations/test_concentric_circle"
+            home=Path("."),
+            parameters={
+                "time": datetime.datetime.now(),
+                "case_id": case_id,
+                "conductivity": conductivity, 
+                "Ks": Ks,
+                "Ku": Ku
+            },
+            directory_name=Path("concentric_circle")
         )
         print("Identifier: ", identifier)
 
@@ -209,8 +216,10 @@ if __name__ == "__main__":
         print("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
         print("Execution time: {:.2f} s".format(tock - tick))
 
-    conductivities = [2**(2*n) for n in range(-3, 2)]
-    lengths = list(range(3))
+    # conductivities = [2**(2*n) for n in range(-3, 2)]
+    # lengths = list(range(3))
+    conductivities = [1, 2]
+    lengths = [1]
 
     Ks = float(sys.argv[1])
     Ku = float(sys.argv[2])
