@@ -6,6 +6,7 @@ from typing import (
     Tuple,
     NamedTuple,
     Iterable,
+    Union,
 )
 
 from coupled_utils import (
@@ -30,7 +31,9 @@ class CoupledMonodomainSolver:
         interface_tags: InterfaceTags,
         parameters: CoupledMonodomainParameters,
         neumann_boundary_condition: Dict[int, df.Expression] = None,
-        v_prev: df.Function = None
+        v_prev: df.Function = None,
+        surface_to_volume_factor: Union[float, df.Constant] = None,
+        membrane_capacitance: Union[float, df.Constant] = None,
     ) -> None:
         self._time = time
         self._mesh = mesh
@@ -40,6 +43,14 @@ class CoupledMonodomainSolver:
         self._interface_function = interface_function
         self._interface_tags = interface_tags
         self._parameters = parameters
+
+        if surface_to_volume_factor is None:
+            surface_to_volume_factor = df.constant(1)
+
+        if membrane_capacitance is None:
+            membrane_capacitance = df.constant(1)
+
+        self._chi_cm = df.Constant(surface_to_volume_factor)*df.Constant(membrane_capacitance)
 
         if neumann_boundary_condition is None:
             self._neumann_boundary_condition: Dict[int, df.Expression] = dict()
@@ -108,12 +119,14 @@ class CoupledMonodomainSolver:
 
         # Set-up variational problem
         dvdt = (v - self._v_prev)/dt
+        dvdt *= self._chi_cm
         v_mid = theta*v + (1.0 - theta)*self._v_prev
 
         # Cell contributions
         Form = dvdt*v_test*dOmega()
         for cell_tag in filter(lambda x: x is not None, self._cell_tags):
-            Form += df.inner(Mi[cell_tag]*df.grad(v_mid), df.grad(v_test))*dOmega(cell_tag)
+            factor = lbda[cell_tag]/(1 + lbda[cell_tag])
+            Form += factor*df.inner(Mi[cell_tag]*df.grad(v_mid), df.grad(v_test))*dOmega(cell_tag)
 
         # Boundary contributions
         for interface_tag in filter(lambda x: x is not None, self._interface_tags):

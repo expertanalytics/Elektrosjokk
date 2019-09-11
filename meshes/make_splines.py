@@ -1,5 +1,5 @@
 import numpy as np
-from prepare_contours import plot_polygon
+# from prepare_contours import plot_polygon
 from pathlib import Path
 import scipy.interpolate as interp
 import matplotlib.pyplot as plt
@@ -8,8 +8,8 @@ from scipy.interpolate import splprep, splev
 
 
 if __name__ == "__main__":
-    contour = np.load("skull.npy")
-    # contour = np.load("pial.npy")
+    # contour = np.load("skull.npy")
+    contour = np.load("pial.npy")
     # contour = np.load("white.npy")
 
     print(contour.shape)

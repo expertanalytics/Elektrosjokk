@@ -117,17 +117,17 @@ def get_brain(i) -> CoupledBrainModel:
     Cm = 1.0          # muF/cm^2 -- Dougherty 2015
 
     Mi_dict = {
-        3: df.Constant(1e-12),    # Set to zero?
+        3: df.Constant(1),    # Set to zero?    1e-12
         1: df.Constant(1),        # Dlougherty isotropic GM intracellular conductivity 1.0 [mS/cm]
         2: df.Constant(1),        # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
         4: df.Constant(1),       # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
     }
 
     Me_dict = {
-        3: df.Constant(16.54),     # Dougherty isotropic CSF conductivity 16.54 [mS/cm]
-        1: df.Constant(1.26),      # Dougherty isotropic WM extracellular conductivity 1.26 [mS/cm]
-        2: df.Constant(2.76),      # Dougherty isotropic GM extracellular conductivity 2.76 [mS/cm]
-        4: df.Constant(2.76),      # Dougherty isotropic GM extracellular conductivity 2.76 [mS/cm]
+        3: df.Constant(2),     # Dougherty isotropic CSF conductivity 16.54 [mS/cm] 16.54
+        1: df.Constant(2),   # 1.26      # Dougherty isotropic WM extracellular conductivity 1.26 [mS/cm]
+        2: df.Constant(2),   # 2.76     # Dougherty isotropic GM extracellular conductivity 2.76 [mS/cm]
+        4: df.Constant(2),      # Dougherty isotropic GM extracellular conductivity 2.76 [mS/cm]
     }
 
     brain = CoupledBrainModel(
@@ -189,11 +189,11 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh)
 
-    field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=40)
+    field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=20)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    field_spec_checkpoint = FieldSpec(save_as=("hdf5"), stride_timestep=40*1000)
+    field_spec_checkpoint = FieldSpec(save_as=("hdf5"), stride_timestep=20*1000)
     saver.add_field(Field("vs", field_spec_checkpoint))
 
     gm_pl_dict = {
@@ -202,23 +202,34 @@ def get_saver(
         3: ((-0.8, -0.2), (-0.6, 0.16), (-0.4, 0.4), (-0.2, 0.55), (0, 0.6), (0.2, 0.55), (0.4, 0.4), (0.6, 0.16), (0.8, -0.2)),
         4: ((-0.62, -0.9), (-0.5, -0.6), (-0.4, -0.3), (-0.3, 0), (-0.2, 0.35), (0, 0.55), (0.2, 0.35), (0.3, -0.3), (0.4, -0.3), (0.5, -0.6), (-0.62, -0.9))
     }
-    csf_pl_dict = {k: map(lambda p: (p[0], p[1] + 0.4), gm_pl_dict[k]) for k in gm_pl_dict}
-    wm_pl_dict = {k: map(lambda p: (p[0], p[1] - 0.4), gm_pl_dict[k]) for k in gm_pl_dict}
+    csf_pl_dict = {k: list(map(lambda p: (p[0], p[1] + 0.4), gm_pl_dict[k])) for k in gm_pl_dict}
+    wm_pl_dict = {k: list(map(lambda p: (p[0], p[1] - 0.4), gm_pl_dict[k])) for k in gm_pl_dict}
 
-    point_field_spec = FieldSpec(stride_timestep=40)
+    point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)
     for i, centre in enumerate(gm_pl_dict[case_index]):
         points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
-        saver.add_field(PointField("psd_v{}".format(i), point_field_spec, points))
-        saver.add_field(PointField("psd_u{}".format(i), point_field_spec, points))
+        saver.add_field(PointField("trace_v{}".format(i), point_field_spec, points))
 
+    point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)
+    for i, centre in enumerate(gm_pl_dict[case_index]):
+        points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
+        saver.add_field(PointField("trace_u{}".format(i), point_field_spec, points))
+
+    point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)
     for i, centre in enumerate(csf_pl_dict[case_index]):
         points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
-        saver.add_field(PointField("psd_csf{}".format(i), point_field_spec, points))
+        saver.add_field(PointField("trace_csf{}".format(i), point_field_spec, points))
 
+    point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)
     for i, centre in enumerate(wm_pl_dict[case_index]):
         points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
-        saver.add_field(PointField("psd_wmv{}".format(i), point_field_spec, points))
-        saver.add_field(PointField("psd_wmu{}".format(i), point_field_spec, points))
+        saver.add_field(PointField("trace_wmv{}".format(i), point_field_spec, points))
+
+    point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)
+    for i, centre in enumerate(wm_pl_dict[case_index]):
+        points = circle_points(radii=[0, 0.1, 0.2, 0.3], num_points=[1, 6, 18, 24], r0=centre)
+        saver.add_field(PointField("trace_wmu{}".format(i), point_field_spec, points))
+
     return saver
 
 
@@ -228,38 +239,47 @@ if __name__ == "__main__":
     from multiprocessing import Pool
 
     def run(case_id):
-        T = 1e1
-        dt = 0.025
+        T = 1e3
+        dt = 0.05
 
         brain = get_brain(case_id)
         solver = get_solver(brain)
 
         identifier = simulation_directory(
             parameters={"time": datetime.datetime.now(), "case_id": case_id},
-            directory_name=".simulations/new_idealised"
+            directory_name=".simulations/idealised_boundary"
         )
 
         num_pl_dict = {1: 9, 2: 0, 3: 9, 4: 11}
         _n = num_pl_dict[case_id]
 
         saver = get_saver(brain, identifier, case_id)
-        v_field_names = ["v"] +  [f"psd_v{n}" for n in range(_n)] + [f"psd_wmv{n}" for n in range(_n)]
-        u_field_names = ["u"] + [f"psd_u{i}" for i in range(_n)] + [f"psd_wmu{i}" for i in range(_n)]
-        u_field_names += [f"psd_csf{i}" for i in range(_n)]
+
+        traces = [f"trace_v{i}" for i in range(_n)]
+        traces += [f"trace_wmv{i}" for i in range(_n)]
+        traces += [f"trace_u{i}" for i in range(_n)]
+        traces += [f"trace_wmu{i}" for i in range(_n)]
+        traces += [f"trace_csf{i}" for i in range(_n)]
+
         vs_field_names = ["vs"]
-        field_names = v_field_names + u_field_names + vs_field_names
 
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         tick = time.perf_counter()
         for i, solution_struct in enumerate(solver.solve(0, T, dt)):
-            print(f"{i} -- {brain.time(0)} -- {solution_struct.vur.vector().norm('l2')}")
+            print(f"{i} -- {brain.time(0):.5f} -- {solution_struct.vur.vector().norm('l2'):.6e}")
 
-            if saver.update_this_timestep(field_names=["v"], timestep=i, time=brain.time(0)):
-                print("saving")
+            update_dict = dict()
+            if saver.update_this_timestep(field_names=traces, timestep=i, time=brain.time(0)):
+                update_dict = {k: solution_struct.vur for k in traces}
+
+            if saver.update_this_timestep(field_names=["v", "u"], timestep=i, time=brain.time(0)):
                 v, u, *_ = solution_struct.vur.split(deepcopy=True)
-                update_dict = {name: v for name in v_field_names}
-                update_dict.update({name: u for name in u_field_names})
-                update_dict.update({name: solution_struct.vs for name in vs_field_names})
+                update_dict.update({"v": v, "u": u})
+
+            if saver.update_this_timestep(field_names=vs_field_names, timestep=i, time=brain.time(0)):
+                update_dict.update({"vs": solution_struct.vs})
+
+            if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)
 
         saver.close()

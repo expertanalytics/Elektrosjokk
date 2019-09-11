@@ -51,8 +51,6 @@ from postspec import (
     SaverSpec,
 )
 
-from extension_modules import load_module
-
 
 def compute_initial_condirions(brain, vs_prev, zero_tags):
     mesh = brain._mesh

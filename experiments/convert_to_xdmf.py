@@ -90,20 +90,24 @@ def test_fenics_read(directory, name):
 if __name__ == "__main__":
     from pathlib import Path
 
-    mesh_dircetory = Path("idealised_experiments/idealised_meshes")
+    # mesh_directory = Path("new_idealised_experiments/new_idealised_meshes")
+    # mesh_directory = Path("concentric_circle") / "concentric_meshes"
 
     # input_name = "new_slice_experiments/new_meshes/skullgmwm_fine1.msh"
     # output_name = "new_slice_experiments/new_meshes/skullgmwm_fine1"
 
-    for i in range(1, 9):
-        input_name = mesh_dircetory / "idealised{}.msh".format(i)
-        print(input_name)
-        output_name = mesh_dircetory / "idealised{}".format(i)
-        mesh = meshio.read(str(input_name))
-        mesh_data = parse_gmsh_mesh(mesh, unify=False)
+    mesh_directory = Path("squiggly_experiment") / "squiggly_meshes"
 
-        write_mesh(mesh_data.points, mesh_data.cells, output_name)
-        write_mesh_function(mesh_data.points, mesh_data.cells, mesh_data.cell_data, f"{output_name}_cf")
-        # write_mesh_function(mesh_data.points, mesh_data.lines, mesh_data.facet_data, f"{output_name}_ff")
+    # for i in range(1, 5):
 
-        # test_fenics_read("foo", "test")
+    input_name = mesh_directory / f"circular.msh"
+    print(input_name)
+    output_name = mesh_directory / f"circular"
+    mesh = meshio.read(str(input_name))
+    mesh_data = parse_gmsh_mesh(mesh, unify=False)
+
+    write_mesh(mesh_data.points, mesh_data.cells, output_name)
+    write_mesh_function(mesh_data.points, mesh_data.cells, mesh_data.cell_data, f"{output_name}_cf")
+    # write_mesh_function(mesh_data.points, mesh_data.lines, mesh_data.facet_data, f"{output_name}_ff")
+
+    # test_fenics_read("foo", "test")

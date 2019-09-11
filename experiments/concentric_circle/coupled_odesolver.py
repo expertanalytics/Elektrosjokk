@@ -53,14 +53,13 @@ class CoupledODESolver:
         self.vs_prev = df.Function(self._function_space_VS, name="vs_prev")
         self.vs = df.Function(self._function_space_VS, name="vs")
 
-        model_name = cell_model.__class__.__name__        # Which module to load
         self.ode_module = load_module(
-            model_name,
+            "LatticeODESolver",
             recompile=self._parameters.reload_extension_modules,
             verbose=self._parameters.reload_extension_modules
         )
 
-        self.ode_solver = self.ode_module.LatticeODESolverSubDomain(
+        self.ode_solver = self.ode_module.LatticeODESolver(
             self._function_space_VS._cpp_object,
             cell_function,
             self._parameters.parameter_map

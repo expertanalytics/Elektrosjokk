@@ -2,14 +2,14 @@ import dolfin as df
 import numpy as np
 
 from typing import (
-    Dict,
     Union,
     NamedTuple,
     List,
     Sequence,
     Iterator,
     Tuple,
-    Any
+    Any,
+    Dict,
 )
 
 from xalode import VectorInt
@@ -55,8 +55,8 @@ class CoupledSplittingSolverParameters(NamedTuple):
 
 
 class CoupledODESolverParameters(NamedTuple):
+    parameter_map: "ODEMap"
     valid_cell_tags: Sequence[int]
-    parameter_map: Dict[int, float]
     timestep: df.Constant = df.Constant(1)
     reload_extension_modules: bool = False
     theta: df.Constant = df.Constant(0.5)
@@ -77,7 +77,7 @@ def get_mesh(directory: str, name: str) -> Tuple[df.Mesh, df.MeshFunction, df.Me
         with df.XDMFFile(f"{directory}/{name}_ff.xdmf") as infile:
             infile.read(mvc, "facet_data")
         interface_function = df.MeshFunction("size_t", mesh, mvc)
-    except RuntimeError:
+    except:
         interface_function = df.MeshFunction("size_t", mesh, mesh.geometric_dimension() - 1)
         interface_function.set_all(0)
     return mesh, cell_function, interface_function

@@ -135,6 +135,7 @@ def get_mesh(
         x0=x0, x1=x1, y0=y0, y1=y1
     )
     square.mark(cell_function, 2)
+    df.File("cf.pvd") << cell_function
     return mesh, cell_function, interface_function
 
 
@@ -292,7 +293,7 @@ if __name__ == "__main__":
             update_dict = {
                 "v": v,
                 "u": u,
-		"vs": solution_struct.vs,
+                "vs": solution_struct.vs,
                 "psd_v0": v,
                 "psd_v1": v,
                 "psd_v2": v,

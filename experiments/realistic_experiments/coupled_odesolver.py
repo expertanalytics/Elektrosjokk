@@ -10,6 +10,7 @@ from typing import (
     NamedTuple,
     Sequence,
     Iterator,
+    Any,
 )
 
 from coupled_utils import (
@@ -55,15 +56,15 @@ class CoupledODESolver:
 
         model_name = cell_model.__class__.__name__        # Which module to load
         self.ode_module = load_module(
-            model_name,
+            "LatticeODESolver",
             recompile=self._parameters.reload_extension_modules,
             verbose=self._parameters.reload_extension_modules
         )
 
-        self.ode_solver = self.ode_module.LatticeODESolverSubDomain(
+        self.ode_solver = self.ode_module.LatticeODESolver(
             self._function_space_VS._cpp_object,
             cell_function,
-            {2: 4, 4: 8}
+            self._parameters.parameter_map,
         )
 
 

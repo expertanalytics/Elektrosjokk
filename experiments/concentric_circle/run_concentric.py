@@ -10,6 +10,8 @@ from pathlib import Path
 from scipy import signal
 from math import pi
 
+from extension_modules import load_module
+
 from postfields import (
     Field,
     PointField,
@@ -100,18 +102,26 @@ def get_brain(i) -> CoupledBrainModel:
 
 
 def get_solver(brain, Ks, Ku) -> BidomainSplittingSolver:
+
+    odesolver_module = load_module("LatticeODESolver")
+    odemap = odesolver_module.ODEMap()
+    odemap.add_ode(1, odesolver_module.Cressman(Ks))
+    odemap.add_ode(2, odesolver_module.Cressman(Ku))
+
     parameters = CoupledSplittingSolverParameters()
     ode_parameters = CoupledODESolverParameters(
         valid_cell_tags=(1, 2),
         reload_extension_modules=False,
-        parameter_map={1: Ks, 2: Ku}
+        parameter_map=odemap
     )
 
     pde_parameters = CoupledMonodomainParameters(
+    # pde_parameters = CoupledBidomainParameters(
         linear_solver_type="direct"
     )
 
     solver = MonodomainSplittingSolver(
+    # solver = BidomainSplittingSolver(
         brain=brain,
         parameters=parameters,
         ode_parameters=ode_parameters,
@@ -162,7 +172,7 @@ if __name__ == "__main__":
 
     def run(args):
         Ks, Ku, case_id = args
-        T = 1e2
+        T = 5e1
         dt = 0.05
 
         brain = get_brain(case_id)
@@ -170,7 +180,7 @@ if __name__ == "__main__":
 
         identifier = simulation_directory(
             parameters={"time": datetime.datetime.now(), "case_id": case_id},
-            directory_name=".simulations/concentric_circle"
+            directory_name=".simulations/test_concentric_circle"
         )
         print("Identifier: ", identifier)
 
@@ -213,6 +223,8 @@ if __name__ == "__main__":
         (2, 8, 1),
         (2, 8, 2),
     ]
+
+    parameter_list = [[4, 8, 0]]
 
     pool = Pool(processes=len(parameter_list))
     pool.map(run, parameter_list)

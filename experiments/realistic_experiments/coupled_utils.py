@@ -8,7 +8,8 @@ from typing import (
     Sequence,
     Iterator,
     Tuple,
-    Any
+    Any,
+    Dict,
 )
 
 from xalode import VectorInt
@@ -54,6 +55,7 @@ class CoupledSplittingSolverParameters(NamedTuple):
 
 
 class CoupledODESolverParameters(NamedTuple):
+    parameter_map: "ODEMap"
     valid_cell_tags: Sequence[int]
     timestep: df.Constant = df.Constant(1)
     reload_extension_modules: bool = False
