@@ -134,7 +134,7 @@ def get_saver(
     case_index: int
 ) -> Saver:
     sourcefiles = [
-        "coupled_bidomain.py",
+        "coupled_monodomain.py",
         "coupled_brainmodel.py",
         "coupled_odesolver.py",
         "coupled_splittingsolver.py",
@@ -153,12 +153,16 @@ def get_saver(
     field_spec_checkpoint = FieldSpec(save_as=("hdf5"), stride_timestep=20*1000)
     saver.add_field(Field("vs", field_spec_checkpoint))
 
-    point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)
     points = np.zeros((9, 2))
     points[:, 0] = np.linspace(0.1, 0.9, 9)
-    saver.add_field(PointField("trace_v", point_field_spec, points))
-    # saver.add_field(PointField("trace_v", point_field_spec, [0, 0]))
-    return saver
+
+    trace_names = []
+    for subfield_index in range(7):
+        point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=subfield_index)
+        name = "trace_sub{}".format(subfield_index)
+        trace_names.append(name)
+        saver.add_field(PointField(name, point_field_spec, points))
+    return saver, trace_names
 
 
 if __name__ == "__main__":
@@ -186,17 +190,16 @@ if __name__ == "__main__":
             },
             directory_name=Path("concentric_circle")
         )
-        print("Identifier: ", identifier)
 
-        saver = get_saver(brain, identifier, case_id)
+        saver, trace_name_list = get_saver(brain, identifier, case_id)
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         tick = time.perf_counter()
         for i, solution_struct in enumerate(solver.solve(0, T, dt)):
             print(f"{i} -- {brain.time(0):.3f} -- {solution_struct.vur.vector().norm('l2'):.3e}")
 
             update_dict = dict()
-            if saver.update_this_timestep(field_names=["trace_v"], timestep=i, time=brain.time(0)):
-                update_dict = {"trace_v": solution_struct.vs}
+            if saver.update_this_timestep(field_names=trace_name_list, timestep=i, time=brain.time(0)):
+                update_dict.update({n: solution_struct.vs for n in trace_name_list})
 
             if saver.update_this_timestep(field_names=["v"], timestep=i, time=brain.time(0)):
                 update_dict.update({"v": solution_struct.vur})
@@ -205,10 +208,7 @@ if __name__ == "__main__":
                 update_dict.update({"vs": solution_struct.vs})
 
             if len(update_dict) != 0:
-                tick = time.perf_counter()
                 saver.update(brain.time, i, update_dict)
-                tock = time.perf_counter()
-                print(f"saving {case_id}: {tock - tick}")
 
         saver.close()
         tock = time.perf_counter()
