@@ -206,7 +206,7 @@ def get_saver(
 
     store_sourcefiles(map(Path, sourcefiles), outpath)
 
-    field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=20)
+    field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=20*10)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
@@ -258,7 +258,8 @@ if __name__ == "__main__":
 
     identifier = simulation_directory(
         parameters={"time": datetime.datetime.now()},
-        directory_name=".simulations/realistic"
+        directory_name=Path("results"),
+        home="."
     )
 
     saver = get_saver(brain, identifier)
@@ -267,7 +268,7 @@ if __name__ == "__main__":
     traces += [f"trace_csf{i}" for i in range(8)]
 
     tick = time.perf_counter()
-    for i, solution_struct in enumerate(solver.solve(0, 1e3, 0.05)):
+    for i, solution_struct in enumerate(solver.solve(0, 10e3, 0.05)):
         print(f"{i} -- {brain.time(0):.5f} -- {solution_struct.vur.vector().norm('l2'):.6e}")
 
         update_dict = dict()

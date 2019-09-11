@@ -21,7 +21,11 @@ from typing import (
 )
 
 
-from post import Saver
+from post import (
+    Saver,
+    Loader,
+)
+
 from coupled_brainmodel import CoupledBrainModel
 from coupled_splittingsolver import BidomainSplittingSolver
 
@@ -48,6 +52,7 @@ from coupled_utils import (
 from postspec import (
     FieldSpec,
     SaverSpec,
+    LoaderSpec,
 )
 
 from extension_modules import load_module
@@ -88,6 +93,16 @@ def compute_initial_condirions(*, brain, vs_prev, exclude_tags):
     Vp = vs_prev.function_space().sub(0)
     merger = df.FunctionAssigner(Vp, VCG)
     merger.assign(vs_prev.sub(0), v_new)
+
+
+def load_initial_condition(vs_prev, simulation_path) -> float:
+     directory = Path("/work/users/jakobes/2dcsf/results/take1/")
+     loaderspec = LoaderSpec(directory / simulation_path)
+     loader = Loader(loaderspec)
+     timestep, time = loader.load_time()
+     ic, time = loader.load_initial_condition("vs", vs_prev.function_space())
+     vs_prev.assign(ic)
+     return time
 
 
 def get_mesh(
@@ -186,7 +201,10 @@ def get_solver(brain) -> BidomainSplittingSolver:
     vs_prev, *_ = solver.solution_fields()
     vs_prev.assign(brain.cell_model.initial_conditions())
     compute_initial_condirions(brain=brain, vs_prev=vs_prev, exclude_tags={3})
-    return solver
+    start_time = None
+    # start_time = load_initial_condition(vs_prev, simulation_hash)
+
+    return solver, start_time
 
 
 def get_saver(
@@ -242,12 +260,14 @@ if __name__ == "__main__":
 
     def run(args):
         square_width, csf_start = args
-        N = 500
-        T = 1e1
+        N = 300
+        T = 5e3
         dt = 0.025
 
         brain = get_brain(N, square_width, csf_start)
-        solver = get_solver(brain)
+        solver, start_time = get_solver(brain)
+        if start_time is None:
+            start_time = 0
 
         identifier = simulation_directory(
             parameters={
@@ -258,7 +278,8 @@ if __name__ == "__main__":
                 "square_width": square_width,
                 "csf_start": csf_start
             },
-            directory_name=".simulations/2d_csf"
+            home=Path("results"),
+            directory_name="take1"
         )
 
         saver = get_saver(brain, identifier)
@@ -271,6 +292,7 @@ if __name__ == "__main__":
             update_dict = {
                 "v": v,
                 "u": u,
+		"vs": solution_struct.vs,
                 "psd_v0": v,
                 "psd_v1": v,
                 "psd_v2": v,
@@ -286,6 +308,17 @@ if __name__ == "__main__":
         print("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
         print("Execution time: {:.2f} s".format(tock - tick))
 
-    parameter_list = [(0.4, 0.3), (0.2, 0.5)]
-    pool = Pool(processes=1)
+    parameter_list = [
+         (0.5, 0.75),
+         (0.4, 0.7),
+         (0.3, 0.65),
+         (0.5, 0.50),
+         (0.4, 0.5),
+         (0.3, 0.50),
+         (0.5, 0.25),
+         (0.4, 0.3),
+         (0.3, 0.35),
+    ]
+
+    pool = Pool(processes=9)
     pool.map(run, parameter_list)
