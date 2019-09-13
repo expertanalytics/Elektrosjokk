@@ -96,18 +96,19 @@ if __name__ == "__main__":
     # input_name = "new_slice_experiments/new_meshes/skullgmwm_fine1.msh"
     # output_name = "new_slice_experiments/new_meshes/skullgmwm_fine1"
 
-    mesh_directory = Path("squiggly_experiment") / "squiggly_meshes"
+    # mesh_directory = Path("squiggly_experiment") / "squiggly_meshes"
+    mesh_directory = Path("mirrored") / "mirrored_meshes"
 
     # for i in range(1, 5):
 
-    input_name = mesh_directory / f"circular.msh"
+    input_name = mesh_directory / f"mirrored.msh"
     print(input_name)
-    output_name = mesh_directory / f"circular"
+    output_name = mesh_directory / f"mirrored"
     mesh = meshio.read(str(input_name))
     mesh_data = parse_gmsh_mesh(mesh, unify=False)
 
     write_mesh(mesh_data.points, mesh_data.cells, output_name)
     write_mesh_function(mesh_data.points, mesh_data.cells, mesh_data.cell_data, f"{output_name}_cf")
-    # write_mesh_function(mesh_data.points, mesh_data.lines, mesh_data.facet_data, f"{output_name}_ff")
+    write_mesh_function(mesh_data.points, mesh_data.lines, mesh_data.facet_data, f"{output_name}_ff")
 
     # test_fenics_read("foo", "test")

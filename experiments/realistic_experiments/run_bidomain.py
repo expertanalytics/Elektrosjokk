@@ -75,20 +75,20 @@ def assign_ic_subdomain(
     u = df.TrialFunction(V)
     v = df.TestFunction(V)
     sol = df.Function(V)
-    sol.vector().zero()     # Make sure it is initialised to zero
+    sol.vector().zero()
 
     F = 0
     for subdomain_id, ic_value in value_dict.items():
         F += -u*v*dX(subdomain_id) + df.Constant(ic_value)*v*dX(subdomain_id)
 
-    # F = -u*v*dX(subdomain_id) + df.Constant(value)*v*dX(subdomain_id)
     a = df.lhs(F)
     L = df.rhs(F)
 
     A = df.assemble(a, keep_diagonal=True)
     A.ident_zeros()
     b = df.assemble(L)
-    solver = df.KrylovSolver("cg", "petsc_amg")
+    # solver = df.KrylovSolver("cg", "petsc_amg")
+    solver = df.LUSolver()
     solver.set_operator(A)
     solver.solve(sol.vector(), b)
 
