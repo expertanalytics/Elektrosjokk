@@ -8,7 +8,7 @@ from pathlib import Path
 from scipy import signal
 from math import pi
 
-from collections import defaultdict
+from poisson import get_anisotropy
 
 from typing import (
     Union,
@@ -21,7 +21,7 @@ from postfields import (
     PointField,
 )
 
-from post import Saver
+from post import Saver, Loader
 from coupled_brainmodel import CoupledBrainModel
 from coupled_splittingsolver import BidomainSplittingSolver
 
@@ -35,6 +35,7 @@ from postutils import (
 from xalbrain.cellmodels import (
     Cressman,
     FitzHughNagumoManual,
+    MorrisLecar,
     Noble
 )
 
@@ -50,52 +51,55 @@ from coupled_utils import (
 from postspec import (
     FieldSpec,
     SaverSpec,
+    LoaderSpec,
 )
 
 from extension_modules import load_module
 
 
-def get_brain(i) -> CoupledBrainModel:
+def get_brain(i: int) -> CoupledBrainModel:
     time_constant = df.Constant(0)
-    mesh, cell_function, interface_function = get_mesh("realistic_meshes", "skullgmwm_fine1")
+    mesh, cell_function, interface_function = get_mesh("mirrored_meshes", "mirrored")
 
     test_cell_function = df.MeshFunction("size_t", mesh, mesh.geometric_dimension())
     test_cell_function.set_all(0)
 
     if i == 0:
-        df.CompiledSubDomain("x[1] > -0.2769*x[0] + 43.4064").mark(test_cell_function, 4)
-        df.CompiledSubDomain("x[1] > -3.8399*x[0] + -2.4458").mark(test_cell_function, 2)
+        df.CompiledSubDomain("x[1] > -0.2769*x[0] + 4.34064").mark(test_cell_function, 4)
+        df.CompiledSubDomain("x[1] > -3.8399*x[0] + -0.24458").mark(test_cell_function, 2)
     elif i == 1:
-        df.CompiledSubDomain("x[1] > -0.2769*x[0] + 43.4064").mark(test_cell_function, 4)
-        df.CompiledSubDomain("x[1] > -1.3659*x[0] + 25.6003").mark(test_cell_function, 2)
+        df.CompiledSubDomain("x[1] > -0.2769*x[0] + 4.34064").mark(test_cell_function, 4)
+        df.CompiledSubDomain("x[1] > -1.3659*x[0] + 2.56003").mark(test_cell_function, 2)
     elif i == 2:
-        df.CompiledSubDomain("x[1] > -0.2769*x[0] + 43.4064").mark(test_cell_function, 4)
-        df.CompiledSubDomain("x[1] > -0.4743*x[0] + 45.7442").mark(test_cell_function, 2)
+        df.CompiledSubDomain("x[1] > -0.2769*x[0] + 4.34064").mark(test_cell_function, 4)
+        df.CompiledSubDomain("x[1] > -0.4743*x[0] + 4.57442").mark(test_cell_function, 2)
 
-    # # Hack?
     cell_function.array()[(cell_function.array() == 2) & (test_cell_function.array() == 4)] = 4
 
-    # cell_tags = CellTags(CSF=3, GM=2, WM=1, Kinf=None)
     cell_tags = CellTags(CSF=3, GM=2, WM=1, Kinf=4)
     interface_tags = InterfaceTags(skull=3, CSF_GM=2, GM_WM=1, CSF=None, GM=None, WM=None)
 
     Chi = 1.26e3      # 1/cm -- Dougherty 2015
     Cm = 1.0          # muF/cm^2 -- Dougherty 2015
 
+    loader = Loader(LoaderSpec(casedir="anisotropy"))
+    _, ngp = next(loader.load_field("normalised_grad_poisson", vector=True))
+    white_Mi = get_anisotropy(ngp, 1, 0.1)
+    white_Me = get_anisotropy(ngp, 2.76, 0.276)
+
     Mi_dict = {
-        1: df.Constant(1e-12),    # Set to zero?
+        3: df.Constant(1e-12),    # Set to zero?
         2: df.Constant(1),        # Dlougherty isotropic GM intracellular conductivity 1.0 [mS/cm]
-        3: df.Constant(1),        # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
+        1: white_Mi,              # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
         4: df.Constant(1),        # Dlougherty isotropic WM intracellular conductivity 1.0 [mS/cm]
     }
 
     Me_dict = {
-        1: df.Constant(16.54),     # Dougherty isotropic CSF conductivity 16.54 [mS/cm]
-        2: df.Constant(2.76e1),      # Dougherty isotropic GM extracellular conductivity 2.76 [mS/cm]
-        3: df.Constant(1.26e1),      # Dougherty isotropic WM extracellular conductivity 1.26 [mS/cm]
-        4: df.Constant(2.76e1),      # Dougherty isotropic 1M extracellular conductivity 2.76 [mS/cm]
+        3: df.Constant(16.54),     # Dougherty isotropic CSF conductivity 16.54 [mS/cm]
+        2: df.Constant(2.76),      # Dougherty isotropic GM extracellular conductivity 2.76 [mS/cm]
+        1: white_Me,               # Dougherty isotropic "M extracellular conductivity 1.26 [mS/cm]
+        4: df.Constant(2.76),      # Dougherty isotropic "M extracellular conductivity 1.26 [mS/cm]
     }
-
 
     brain = CoupledBrainModel(
         time=time_constant,
@@ -117,21 +121,18 @@ def get_solver(brain) -> BidomainSplittingSolver:
 
     odesolver_module = load_module("LatticeODESolver")
     odemap = odesolver_module.ODEMap()
-    odemap.add_ode(1, odesolver_module.Fitzhugh())
-    odemap.add_ode(2, odesolver_module.Cressman(4))
-    odemap.add_ode(4, odesolver_module.Cressman(4))
+    odemap.add_ode(1, odesolver_module.MorrisLecar())
+    odemap.add_ode(2, odesolver_module.Cressman())
+    odemap.add_ode(4, odesolver_module.Cressman())
 
     parameters = CoupledSplittingSolverParameters()
     ode_parameters = CoupledODESolverParameters(
-        # valid_cell_tags=(1, 2),
         valid_cell_tags=(1, 2, 4),
         reload_extension_modules=False,
         parameter_map=odemap
     )
 
-    pde_parameters = CoupledBidomainParameters(
-        linear_solver_type="direct"
-    )
+    pde_parameters = CoupledBidomainParameters(linear_solver_type="iterative")
 
     solver = BidomainSplittingSolver(
         brain=brain,
@@ -143,20 +144,19 @@ def get_solver(brain) -> BidomainSplittingSolver:
     vs_prev, *_ = solver.solution_fields()
 
     cressman_values = list(Cressman.default_initial_conditions().values())
-    fitzhugh_values = list(FitzHughNagumoManual.default_initial_conditions().values())
 
-    fitzhugh_full_values = [0]*len(cressman_values)
-    fitzhugh_full_values[len(fitzhugh_values)] = fitzhugh_values
+    morris_lecar_values = list(MorrisLecar.default_initial_conditions().values())
+    morris_lecar_full_values = [0]*len(cressman_values)
+    morris_lecar_full_values[:len(morris_lecar_values)] = morris_lecar_values
 
     csf_values = [0]*len(cressman_values)
 
-    _, cell_function, _ = get_mesh("realistic_meshes", "skullgmwm_fine1")
+    _, cell_function, _ = get_mesh("mirrored_meshes", "mirrored")
 
     cell_model_dict = {
-        1: fitzhugh_values,
+        1: morris_lecar_full_values,
         3: csf_values,
         2: cressman_values,
-        4: cressman_values,
     }
     odesolver_module.assign_vector(
         vs_prev.vector(),
@@ -164,6 +164,7 @@ def get_solver(brain) -> BidomainSplittingSolver:
         cell_function,
         vs_prev.function_space()._cpp_object
     )
+
     return solver
 
 
@@ -238,12 +239,13 @@ def get_saver(
 
 
 if __name__ == "__main__":
-    brain = get_brain(2)
+    brain = get_brain(1)
     solver = get_solver(brain)
 
     identifier = simulation_directory(
         parameters={"time": datetime.datetime.now()},
-        directory_name=".simulations/realistic"
+        directory_name=Path("results"),
+        home="."
     )
 
     saver = get_saver(brain, identifier)
@@ -254,8 +256,9 @@ if __name__ == "__main__":
 
 
     tick = time.perf_counter()
-    for i, solution_struct in enumerate(solver.solve(0, 2e1, 0.05)):
-
+    for i, solution_struct in enumerate(solver.solve(0, 1e3, 0.05)):
+        tock = time.perf_counter()
+        print(f"time: {tock - tick}")
         print(f"{i} -- {brain.time(0):.5f} -- {solution_struct.vur.vector().norm('l2'):.6e}")
 
         update_dict = dict()
@@ -267,9 +270,12 @@ if __name__ == "__main__":
             v, u, *_ = solution_struct.vur.split(deepcopy=True)
             update_dict.update({"v": v, "u": u})
 
+        if saver.update_this_timestep(field_names=["vs"], timestep=i, time=brain.time(0)):
+            update_dict.update({"vs": solution_struct.vs})
+
         if len(update_dict) != 0:
             saver.update(brain.time, i, update_dict)
+        tick = tock
 
     saver.close()
     tock = time.perf_counter()
-    print(tock - tick)

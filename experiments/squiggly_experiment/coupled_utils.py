@@ -8,8 +8,7 @@ from typing import (
     Sequence,
     Iterator,
     Tuple,
-    Any,
-    Dict,
+    Any
 )
 
 from xalode import VectorInt
@@ -79,8 +78,7 @@ def get_mesh(directory: str, name: str) -> Tuple[df.Mesh, df.MeshFunction, df.Me
         interface_function = df.MeshFunction("size_t", mesh, mvc)
     except RuntimeError:
         interface_function = df.MeshFunction("size_t", mesh, mesh.geometric_dimension() - 1)
-
-    mesh.coordinates()[:] /= 10
+        interface_function.set_all(0)
     return mesh, cell_function, interface_function
 
 
