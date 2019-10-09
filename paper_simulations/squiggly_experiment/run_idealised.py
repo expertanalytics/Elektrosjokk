@@ -1,3 +1,4 @@
+import math
 import time
 import resource
 import warnings
@@ -119,7 +120,7 @@ def assign_initial_condition(brain, vs_prev: df.Function, cell_model_dict: Dict[
 
 def get_brain(case_id, conductivity) -> CoupledBrainModel:
     time_constant = df.Constant(0)
-    mesh, cell_function, interface_function = get_mesh("squiggly_meshes", "squiggly")
+    mesh, cell_function, interface_function = get_mesh("squiggly_meshes", "flower")
 
     cell_tags = CellTags(CSF=3, GM=2, WM=1, Kinf=4)
     interface_tags = InterfaceTags(skull=None, CSF_GM=None, GM_WM=None, CSF=None, GM=None, WM=None)
@@ -172,17 +173,19 @@ def get_solver(brain, Ks, Ku) -> BidomainSplittingSolver:
 
     odesolver_module = load_module("LatticeODESolver")
     odemap = odesolver_module.ODEMap()
-    odemap.add_ode(1, odesolver_module.Fitzhugh())
+    # odemap.add_ode(1, odesolver_module.Fitzhugh())
     odemap.add_ode(2, odesolver_module.Cressman(Ks))
     odemap.add_ode(4, odesolver_module.Cressman(Ku))
+    print("f1")
 
     parameters = CoupledSplittingSolverParameters()
     ode_parameters = CoupledODESolverParameters(
-        # valid_cell_tags=(1, 2,),
-        valid_cell_tags=(1, 2, 4),
+        valid_cell_tags=(1, 2,),
+        # valid_cell_tags=(1, 2, 4),
         reload_extension_modules=False,
         parameter_map=odemap
     )
+    print("f2")
 
     pde_parameters = CoupledBidomainParameters(linear_solver_type="direct")
 
@@ -192,6 +195,7 @@ def get_solver(brain, Ks, Ku) -> BidomainSplittingSolver:
         ode_parameters=ode_parameters,
         pde_parameters=pde_parameters
     )
+    print("f3")
 
     vs_prev, *_ = solver.solution_fields()
 
@@ -200,23 +204,26 @@ def get_solver(brain, Ks, Ku) -> BidomainSplittingSolver:
 
     fitzhugh_full_values = [0]*len(cressman_values)
     fitzhugh_full_values[len(fitzhugh_values)] = fitzhugh_values
+    print("f4")
 
     csf_values = [0]*len(cressman_values)
 
-    _, cell_function, _ = get_mesh("squiggly_meshes", "squiggly")
+    _, cell_function, _ = get_mesh("squiggly_meshes", "flower")
 
     cell_model_dict = {
-        1: fitzhugh_values,
+        1: cressman_values,
         3: csf_values,
         2: cressman_values,
         4: cressman_values,
     }
+    print("f5")
     odesolver_module.assign_vector(
         vs_prev.vector(),
         cell_model_dict,
         cell_function,
         vs_prev.function_space()._cpp_object
     )
+    print("f6")
 
     return solver
 
@@ -251,7 +258,7 @@ def get_saver(
     r = np.linspace(-9, 9, )
     points = np.zeros(shape=(r.size, 2))
     for sub_index in range(7):
-        point_field_spec = FieldSpec(stride_timestep=20, sub_field_index=sub_index)
+        point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=sub_index)
         for theta in [1, 5, 9, 13]:
             points[:, 0] = r*np.cos(theta)
             points[:, 1] = r*np.sin(theta)
@@ -275,15 +282,17 @@ if __name__ == "__main__":
 
     def run(args):
         conductivity, case_id, Ks, Ku = args
-        T = 1e1
+        T = 10e3        # 10 seconds
         dt = 0.05
+        print(1)
 
         brain = get_brain(case_id, conductivity)
+        print(2)
         solver = get_solver(brain, Ks, Ku)
-        print("got solver")
+        print(3)
 
         identifier = simulation_directory(
-            home=path("."),
+            home=Path("."),
             parameters={
                  "time": datetime.datetime.now(),
                  "case_id": case_id,
@@ -291,16 +300,22 @@ if __name__ == "__main__":
                  "Ks": Ks,
                  "Ku": Ku
             },
-            directory_name="squiggly"
+            directory_name="squiggly/K_{}_{}".format(Ks, Ku)
         )
+        print(4)
 
-        saver = get_saver(brain, identifier, case_id)
+        saver, trace_name_list = get_saver(brain, identifier, case_id)
+        print(5)
 
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         tick = time.perf_counter()
+        print(5)
 
         for i, solution_struct in enumerate(solver.solve(0, T, dt)):
-            print(f"{i} -- {brain.time(0):.5f} -- {solution_struct.vur.vector().norm('l2'):.6e}")
+            norm = solution_struct.vur.vector().norm('l2')
+            if math.isnan(norm):
+                assert False, "nan nan nan"
+            print(f"{i} -- {brain.time(0):.5f} -- {norm:.6e}")
 
             update_dict = dict()
             if saver.update_this_timestep(field_names=["u", "v"], timestep=i, time=brain.time(0)):
@@ -313,9 +328,6 @@ if __name__ == "__main__":
             if saver.update_this_timestep(field_names=["vs"], timestep=i, time=brain.time(0)):
                 update_dict.update({"vs": solution_struct.vs})
 
-            if saver.update_this_timestep(field_names=["trace_u", "trace_v"], timestep=i, time=brain.time()):
-                update_dict.update({"trace_u": solution_struct.vur, "trace_v": solution_struct.vur})
-
             if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)
 
@@ -325,17 +337,14 @@ if __name__ == "__main__":
         print("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
         print("Execution time: {:.2f} s".format(tock - tick))
 
-    conductivities = [2**(2*n) for n in range(-3, 2)]
-    lengths = list(range(3))
+    run((1, 1, 4, 8))
+    # conductivities = [2**(2*n) for n in range(-3, 2)]
+    # lengths = list(range(3))
 
-    conductivities = [1, 2]
-    lengths = [1]
+    # Ks = float(sys.argv[1])
+    # Ku = float(sys.argv[2])
 
-    Ks = float(sys.argv[1])
-    Ku = float(sys.argv[2])
+    # parameter_list = list(itertools.product(conductivities, lengths, [Ks], [Ku]))
 
-    parameter_list = list(itertools.product(conductivities, lengths, [Ks], [Ku]))
-    parameter_list = parameter_list[:2]
-
-    pool = Pool(processes=len(parameter_list))
-    pool.map(run, parameter_list)
+    # pool = Pool(processes=len(parameter_list))
+    # pool.map(run, parameter_list)

@@ -97,13 +97,14 @@ if __name__ == "__main__":
     # output_name = "new_slice_experiments/new_meshes/skullgmwm_fine1"
 
     # mesh_directory = Path("squiggly_experiment") / "squiggly_meshes"
-    mesh_directory = Path("mirrored") / "mirrored_meshes"
+    # mesh_directory = Path("mirrored") / "mirrored_meshes"
+    mesh_directory = Path("paper_simulations") / "squiggly_experiment" / "squiggly_meshes"
 
     # for i in range(1, 5):
 
-    input_name = mesh_directory / f"mirrored.msh"
+    input_name = mesh_directory / f"flower.msh"
     print(input_name)
-    output_name = mesh_directory / f"mirrored"
+    output_name = mesh_directory / f"flower"
     mesh = meshio.read(str(input_name))
     mesh_data = parse_gmsh_mesh(mesh, unify=False)
 
