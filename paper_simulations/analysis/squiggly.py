@@ -81,6 +81,7 @@ if __name__ == "__main__":
                     probe_data = get_probe(probe_path=probe_path, name=probe_name)
                     print("\n", case.stem, probe_name)
                     report_probe(probe_data, experiment, case.stem, probe_name=probe_name)
+            input()
 
     # for theta in [1, 5, 9, 13]:
     #     probe_name = f"trace_offset4_{theta}"

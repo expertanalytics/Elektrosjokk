@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 
 from pathlib import Path
 
+from scipy.signal import find_peaks
+
 # Custom stuff
 from welch import welch_psd
 from post import read_point_values
@@ -30,22 +32,14 @@ def get_psd(*, data: np.ndarray, FS, NPERSEG):
     return frequencies, power_density
 
 
-def spike_and_burst(voltage_array, times, dt, voltage_threshold=-40):
-    """ values grater than `voltage_threshold` is considered a spike. """
-    assert len(voltage_array.shape) == 1
+def find_num_spikes(probe_data, time, dt):
+    peaks, properties = find_peaks(probe_data, height=-55)
 
-    yhat = voltage_array > voltage_threshold         # greater than 30 mV is considered a spike
-    runlengths, start_indices, values = rle(yhat)
-    spike_indices = runlengths < 10*int(1/dt)       # Factor 1 comes from trial and error
-    spike_times = times[start_indices[spike_indices]]       # start times of spikes
-
-    # NB! Need to be careful if it is not continuously spiking
-    num_spikes = spike_times.size
-    print(runlengths)
-
-    quiet_indices = np.where(runlengths > 2*int(1/dt))[0]     # Why 1000?
-    burst_duration = start_indices[quiet_indices - 1]
-    return num_spikes, burst_duration[0]
+    num_peaks = peaks.size
+    if num_peaks == 0:
+        return num_peaks, 0
+    duration = time[peaks[-1]]
+    return num_peaks, duration
 
 
 def plot_psd(datapath, experiment, simulation_hash):
@@ -92,20 +86,20 @@ def make_report(datapath, experiment, simulation_hash):
     dt = (time[1] - time[0])/1000
 
     for i in range(1, probe_data.shape[1]):
-        num_spikes, durations = spike_and_burst(probe_data[:, i], time, dt)
+        num_spikes, durations = find_num_spikes(probe_data[:, i], time, dt)
         print(num_spikes, durations)
 
 
 if __name__ == "__main__":
 
-    datapath = Path("/home/jakobes/data/concentric_circle/concentric_circle")
+    datapath = Path("/home/jakobes/data/paper/concentric_circle")
     experiment = "4.0_8.0"
 
     for e in (datapath / experiment).iterdir():
         if e.is_dir():
             print(e.stem,)
             make_report(datapath, experiment, e.stem)
-            plot_psd(datapath, experiment, e.stem)
+            # plot_psd(datapath, experiment, e.stem)
             print()
             print()
 
