@@ -171,8 +171,9 @@ if __name__ == "__main__":
             if saver.update_this_timestep(field_names=["vs"], timestep=i, time=brain.time(0)):
                 update_dict.update({"vs": vs})
 
-            if saver.update_this_timestep(field_names=["v_points", "u_points"], timestep=i, time=brain.time(0)):
-                update_dict.update({"v_points": vs, "u_points": vs})
+            # FIXME: Point Fiels break in parallel
+            # if saver.update_this_timestep(field_names=["v_points", "u_points"], timestep=i, time=brain.time(0)):
+            #     update_dict.update({"v_points": vs, "u_points": vs})
 
             if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)
