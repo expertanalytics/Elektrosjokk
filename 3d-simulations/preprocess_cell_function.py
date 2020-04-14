@@ -80,7 +80,8 @@ def read_function(mesh: df.Mesh, name: Path) -> df.Function:
     return function
 
 if __name__ == "__main__":
-    mesh_name = Path("test_mesh/cube.xdmf")
+    # mesh_name = Path("test_mesh/cube.xdmf")
+    mesh_name = Path("mesh/brain_v1.xdmf")
     mesh, cell_function = read_mesh(mesh_name)
     indicator = indicator_function(mesh, cell_function, (1, 2))
 

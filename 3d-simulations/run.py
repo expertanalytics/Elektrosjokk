@@ -41,22 +41,20 @@ from postfields import (
     PointField,
 )
 
+df.parameters["form_compiler"]["cpp_optimize"] = True
+flags = ["-O3", "-ffast-math", "-march=native"]
+df.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
+df.parameters["form_compiler"]["quadrature_degree"] = 3
+
 
 def get_brain(*, conductivity: float):
     time_constant = df.Constant(0)
 
-    # unit cube for now
-    # mesh = df.UnitCubeMesh(20, 20, 20)
-    # cell_function = df.MeshFunction("size_t", mesh, mesh.geometry().dim())
-    # cell_function.set_all(1)
-    # df.CompiledSubDomain(
-    #     "0.25 < x[0] && x[0] < 0.75 && 0.25 < x[1] && x[1] < 0.75 && 0.25 < x[2] && x[2] < 0.75"
-    # ).mark(cell_function, 2)
-
     # Realistic mesh
-    # mesh, cell_function = get_mesh(Path("mesh"), "brain_v1")
-    mesh, cell_function = get_mesh(Path("test_mesh"), "cube")
-    indicator_function = get_indicator_function(Path("test_mesh") / "indicator_function.xdmf", mesh)
+    mesh, cell_function = get_mesh(Path("mesh"), "brain_v1")
+    indicator_function = get_indicator_function(Path("mesh") / "brain_v1_indicator.xdmf", mesh)
+    # mesh, cell_function = get_mesh(Path("test_mesh"), "cube")
+    # indicator_function = get_indicator_function(Path("test_mesh") / "indicator_function.xdmf", mesh)
 
     # 1 -- GM, 2 -- WM
     Mi_dict = {1: conductivity, 2: conductivity}      # 1 mS/cm for WM and GM
@@ -83,6 +81,9 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     odemap.add_ode(2, odesolver_module.Cressman(Ku))
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
+    splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
+    splitting_parameters["BidomainSolver"]["algorithm"] = "gmres"
+    splitting_parameters["BidomainSolver"]["preconditioner"] = "petsc_amg"
 
     solver = MultiCellSplittingSolver(
         model=brain,
