@@ -132,7 +132,7 @@ if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
     def run(conductivity, Ks, Ku):
-        T = 1e3
+        T = 1e1
         dt = 0.05
         brain = get_brain(conductivity=conductivity)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
@@ -157,6 +157,7 @@ if __name__ == "__main__":
         saver = get_saver(brain=brain, outpath=identifier)
 
         tick = time.perf_counter()
+        resource_usage = resource.getrusage(resource.RUSAGE_SELF)
 
         for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve(0, T, dt)):
             norm = vur.vector().norm('l2')
@@ -180,7 +181,6 @@ if __name__ == "__main__":
 
         saver.close()
         tock = time.perf_counter()
-        resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         max_memory_usage = resource_usage.ru_maxrss/1e6  # Kb to Gb
         print("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
         print("Execution time: {:.2f} s".format(tock - tick))
