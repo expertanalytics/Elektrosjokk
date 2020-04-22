@@ -61,7 +61,28 @@ def indicator_function(
     solver.solve(sol.vector(), b)
 
     sol.vector()[:] = np.rint(sol.vector().get_local())
+    print(np.unique(sol.vector().get_local()))
     return sol
+
+
+def assign_indicator_function(mesh, cell_function):
+    from IPython import embed
+    function_space = df.FunctionSpace(mesh, "CG", 1)
+    dofmap = function_space.dofmap()
+
+    indicator_function = df.Function(function_space)
+
+    cell_tags = np.sort(np.unique(cell_function.array()))
+
+    for tag in cell_tags:
+        sub_cell_indices = np.where(cell_function.array() == tag)[0]
+
+        for cell_index in sub_cell_indices:
+            dofs = dofmap.cell_dofs(cell_index)
+            foo = cell_function.array()[cell_index]
+            indicator_function.vector()[dofs] = foo
+
+    return indicator_function
 
 
 def save_function(indicator_function: df.Function, output_path: Path) -> None:
@@ -75,19 +96,21 @@ def read_function(mesh: df.Mesh, name: Path) -> df.Function:
     function_space = df.FunctionSpace(mesh, "DG", 1)
     function = df.Function(function_space)
 
-    with df.XDMFFile(name) as xdmf:
+    with df.XDMFFile(str(name)) as xdmf:
         xdmf.read_checkpoint(function, "indicator", 0)
     return function
 
+
 if __name__ == "__main__":
-    # mesh_name = Path("test_mesh/cube.xdmf")
-    mesh_name = Path("mesh/brain_v1.xdmf")
+    mesh_name = Path("mesh/brain_64.xdmf")
     mesh, cell_function = read_mesh(mesh_name)
-    indicator = indicator_function(mesh, cell_function, (1, 2))
+
+    indicator = assign_indicator_function(mesh, cell_function)
+    # indicator = indicator_function(mesh, cell_function, (1, 2))
 
     mesh_directory = mesh_name.parent
     indicator_name = f"{mesh_name.stem}_indicator.xdmf"
     save_function(indicator, mesh_directory / indicator_name)
 
-    function = read_function(mesh, "test_mesh/cube_indicator.xdmf")
+    function = read_function(mesh, mesh_directory / indicator_name)
     df.File("indicator.pvd") << function

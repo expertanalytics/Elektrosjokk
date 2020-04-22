@@ -41,18 +41,18 @@ from postfields import (
     PointField,
 )
 
-df.parameters["form_compiler"]["cpp_optimize"] = True
-flags = ["-O3", "-ffast-math", "-march=native"]
-df.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
-df.parameters["form_compiler"]["quadrature_degree"] = 3
+# df.parameters["form_compiler"]["cpp_optimize"] = True
+# flags = ["-O3", "-ffast-math", "-march=native"]
+# df.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
+# df.parameters["form_compiler"]["quadrature_degree"] = 3
 
 
 def get_brain(*, conductivity: float):
     time_constant = df.Constant(0)
 
     # Realistic mesh
-    mesh, cell_function = get_mesh(Path("mesh"), "brain_v1")
-    indicator_function = get_indicator_function(Path("mesh") / "brain_v1_indicator.xdmf", mesh)
+    mesh, cell_function = get_mesh(Path("mesh"), "brain_64")
+    indicator_function = get_indicator_function(Path("mesh") / "brain_64_indicator.xdmf", mesh)
     # mesh, cell_function = get_mesh(Path("test_mesh"), "cube")
     # indicator_function = get_indicator_function(Path("test_mesh") / "indicator_function.xdmf", mesh)
 
@@ -82,7 +82,7 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
-    splitting_parameters["BidomainSolver"]["algorithm"] = "gmres"
+    splitting_parameters["BidomainSolver"]["algorithm"] = "default"
     splitting_parameters["BidomainSolver"]["preconditioner"] = "petsc_amg"
 
     solver = MultiCellSplittingSolver(
@@ -108,7 +108,6 @@ def get_saver(
 
     saver_parameters = SaverSpec(casedir=outpath, overwrite_casedir=True)
     saver = Saver(saver_parameters)
-    # saver.store_mesh(brain.mesh, brain.cell_domains)
 
     field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=20)
     saver.add_field(Field("v", field_spec_checkpoint))
@@ -132,6 +131,7 @@ if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
     def run(conductivity, Ks, Ku):
+        resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         T = 1e1
         dt = 0.05
         brain = get_brain(conductivity=conductivity)
@@ -157,7 +157,6 @@ if __name__ == "__main__":
         saver = get_saver(brain=brain, outpath=identifier)
 
         tick = time.perf_counter()
-        resource_usage = resource.getrusage(resource.RUSAGE_SELF)
 
         for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve(0, T, dt)):
             norm = vur.vector().norm('l2')
