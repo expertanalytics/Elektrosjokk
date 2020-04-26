@@ -51,8 +51,10 @@ def get_brain(*, conductivity: float):
     time_constant = df.Constant(0)
 
     # Realistic mesh
-    mesh, cell_function = get_mesh(Path("mesh"), "brain_64")
-    indicator_function = get_indicator_function(Path("mesh") / "brain_64_indicator.xdmf", mesh)
+    mesh_directory = Path("mesh")
+    mesh_name = "brain_128"
+    mesh, cell_function = get_mesh(mesh_directory, mesh_name)
+    indicator_function = get_indicator_function(mesh_directory / f"{mesh_name}_indicator.xdmf", mesh)
     # mesh, cell_function = get_mesh(Path("test_mesh"), "cube")
     # indicator_function = get_indicator_function(Path("test_mesh") / "indicator_function.xdmf", mesh)
 
@@ -76,9 +78,10 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 
     odesolver_module = load_module("LatticeODESolver")
     odemap = odesolver_module.ODEMap()
-    # odemap.add_ode(1, odesolver_module.Fitzhugh())
     odemap.add_ode(1, odesolver_module.Cressman(Ks))
     odemap.add_ode(2, odesolver_module.Cressman(Ku))
+    odemap.add_ode(11, odesolver_module.Cressman(Ks))
+    odemap.add_ode(21, odesolver_module.Cressman(Ku))
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
@@ -87,7 +90,7 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 
     solver = MultiCellSplittingSolver(
         model=brain,
-        valid_cell_tags=(1, 2),
+        valid_cell_tags=(1, 2, 11, 21),
         parameter_map=odemap,
         parameters=splitting_parameters,
     )
@@ -132,8 +135,8 @@ if __name__ == "__main__":
 
     def run(conductivity, Ks, Ku):
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
-        T = 1e1
         dt = 0.05
+        T = 50*dt
         brain = get_brain(conductivity=conductivity)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 

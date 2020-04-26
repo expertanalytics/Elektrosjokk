@@ -7,26 +7,39 @@ from pathlib import Path
 import dolfin as df
 import numpy as np
 
+from postutils import get_mesh
 
-def read_mesh(mesh_path: Path) -> tp.Tuple[df.Mesh, df.MeshFunction]:
-    directory = mesh_path.parent
 
-    _mesh_name = f"{mesh_path.stem}.xdmf"
-    _cf_name = f"{mesh_path.stem}_cf.xdmf"
+def transform_cell_function(cell_function):
+    test_cell_function = df.MeshFunction(
+        "size_t",
+        cell_function.mesh(),
+        cell_function.mesh().geometry().dim()
+    )
+    test_cell_function.set_all(0)
 
-    # read mesh
-    mesh = df.Mesh()
-    with df.XDMFFile(str(directory / _mesh_name)) as mesh_file:
-        mesh_file.read(mesh)
+    radius = 10
+    point = (
+        -31.438040121479837,
+        -14.177054330404985,
+        9.4680037212737
+    )
+    df.CompiledSubDomain(
+        "pow(x[0] - x0, 2) + pow(x[1] - x1, 2) + pow(x[2] - x2, 2) < pow(r, 2)",
+        x0=point[0], x1=point[1], x2=point[2], r=radius
+    ).mark(test_cell_function, 11)
 
-    # read cell function
-    cell_function = df.MeshFunction("size_t", mesh, mesh.geometry().dim())
-    with df.XDMFFile(str(directory / _cf_name)) as cf_file:
-        cf_file.read(cell_function)
+    white = 1
+    gray = 2
+    cell_function.array()[
+        (cell_function.array() == gray) & (test_cell_function.array() == 11)
+    ] = 11
 
-    cell_tags = np.unique(cell_function.array()).astype(np.int_)
-    print(f"Cell tags: {cell_tags}")
-    return mesh, cell_function
+    cell_function.array()[
+        (cell_function.array() == white) & (test_cell_function.array() == 11)
+    ] = 21
+
+    df.File("foo.pvd") << cell_function
 
 
 def indicator_function(
@@ -102,14 +115,17 @@ def read_function(mesh: df.Mesh, name: Path) -> df.Function:
 
 
 if __name__ == "__main__":
-    mesh_name = Path("mesh/brain_64.xdmf")
-    mesh, cell_function = read_mesh(mesh_name)
+    mesh_name = "brain_128"
+    mesh_directory = Path("mesh")
+    mesh, cell_function = get_mesh(Path("mesh"), mesh_name)
+
+    transform_cell_function(cell_function)
+    df.File("cell_function.pvd") << cell_function
 
     indicator = assign_indicator_function(mesh, cell_function)
     # indicator = indicator_function(mesh, cell_function, (1, 2))
 
-    mesh_directory = mesh_name.parent
-    indicator_name = f"{mesh_name.stem}_indicator.xdmf"
+    indicator_name = f"{mesh_name}_indicator.xdmf"
     save_function(indicator, mesh_directory / indicator_name)
 
     function = read_function(mesh, mesh_directory / indicator_name)

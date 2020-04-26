@@ -2,7 +2,7 @@ import dolfin as df
 
 
 mesh = df.Mesh()
-with df.XDMFFile("mesh/brain_v1.xdmf") as mesh_reader:
+with df.XDMFFile("mesh/brain_128.xdmf") as mesh_reader:
     mesh_reader.read(mesh)
 
 
