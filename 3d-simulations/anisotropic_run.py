@@ -41,32 +41,45 @@ from postfields import (
     PointField,
 )
 
-# df.parameters["form_compiler"]["cpp_optimize"] = True
-# flags = ["-O3", "-ffast-math", "-march=native"]
-# df.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
-# df.parameters["form_compiler"]["quadrature_degree"] = 3
+df.parameters["form_compiler"]["cpp_optimize"] = True
+flags = ["-O3", "-ffast-math", "-march=native"]
+df.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
+df.parameters["form_compiler"]["quadrature_degree"] = 3
+
+
+def get_conductivities(mesh, directory: Path) -> tp.Tuple[df.Function, df.Function]:
+    function_space = df.TensorFunctionSpace(mesh, "CG", 1)
+    extracellular_function = df.Function(function_space)
+    intracellular_function = df.Function(function_space)
+
+    name = "indicator"  #TODO: change to conductivity
+    with df.XDMFFile(str(directory / "extracellular_conductivity.xdmf")) as ifh:
+        ifh.read_checkpoint(extracellular_function, name, counter=0)
+
+    with df.XDMFFile(str(directory / "intracellular_conductivity.xdmf")) as ifh:
+        ifh.read_checkpoint(intracellular_function, name, counter=0)
+
+    return intracellular_function, extracellular_function
 
 
 def get_brain(*, conductivity: float):
     time_constant = df.Constant(0)
 
     # Realistic mesh
-    mesh_directory = Path("mesh")
-    mesh_name = "brain_128"
+    mesh_directory = Path.home() / "Documents/brain3d/meshes"
+    mesh_name = "brain_64"
     mesh, cell_function = get_mesh(mesh_directory, mesh_name)
+    mesh.coordinates()[:] /= 10
     indicator_function = get_indicator_function(mesh_directory / f"{mesh_name}_indicator.xdmf", mesh)
-    # mesh, cell_function = get_mesh(Path("test_mesh"), "cube")
-    # indicator_function = get_indicator_function(Path("test_mesh") / "indicator_function.xdmf", mesh)
 
     # 1 -- GM, 2 -- WM
-    Mi_dict = {1: conductivity, 2: conductivity}      # 1 mS/cm for WM and GM
-    Me_dict = {1: 2.76, 2: 1.26}
+    Mi, Me = get_conductivities(mesh, Path("."))
 
     brain = Model(
         domain=mesh,
         time=time_constant,
-        M_i=Mi_dict,
-        M_e=Me_dict,
+        M_i=Mi,
+        M_e=Me,
         cell_models=Cressman(),      # Default parameters
         cell_domains=cell_function,
         indicator_function=indicator_function
@@ -79,18 +92,19 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     odesolver_module = load_module("LatticeODESolver")
     odemap = odesolver_module.ODEMap()
     odemap.add_ode(1, odesolver_module.Cressman(Ks))
-    odemap.add_ode(2, odesolver_module.Cressman(Ku))
+    # odemap.add_ode(2, odesolver_module.Cressman(Ku))
     odemap.add_ode(11, odesolver_module.Cressman(Ks))
-    odemap.add_ode(21, odesolver_module.Cressman(Ku))
+    # odemap.add_ode(21, odesolver_module.Cressman(Ku))
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
-    splitting_parameters["BidomainSolver"]["algorithm"] = "default"
-    splitting_parameters["BidomainSolver"]["preconditioner"] = "petsc_amg"
+    # splitting_parameters["BidomainSolver"]["algorithm"] = "default"
+    # splitting_parameters["BidomainSolver"]["preconditioner"] = "petsc_amg"
+    splitting_parameters["BidomainSolver"]["algorithm"] = "gmres"
+    splitting_parameters["BidomainSolver"]["preconditioner"] = "amg"
 
     solver = MultiCellSplittingSolver(
         model=brain,
-        valid_cell_tags=(1, 2, 11, 21),
         parameter_map=odemap,
         parameters=splitting_parameters,
     )
@@ -105,7 +119,7 @@ def get_saver(
     outpath: Path,
 ) -> Saver:
     sourcefiles = [
-        "run.py",
+        "anisotropic_run.py",
     ]
     store_sourcefiles(map(Path, sourcefiles), outpath)
 
@@ -136,7 +150,7 @@ if __name__ == "__main__":
     def run(conductivity, Ks, Ku):
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         dt = 0.05
-        T = 50*dt
+        T = 1e3
         brain = get_brain(conductivity=conductivity)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 

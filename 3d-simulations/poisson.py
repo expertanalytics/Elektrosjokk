@@ -1,24 +1,35 @@
 import dolfin as df
+from pathlib import Path
 
 
 mesh = df.Mesh()
-with df.XDMFFile("mesh/brain_128.xdmf") as mesh_reader:
+mesh_directory = Path.home() / "Documents" / "brain3d" / "meshes"
+with df.XDMFFile(str(mesh_directory / "brain_64.xdmf")) as mesh_reader:
     mesh_reader.read(mesh)
+mesh.coordinates()[:] /= 10     # Convert to cm
 
+function_space = df.TensorFunctionSpace(mesh, "CG", 1)
 
-function_space = df.FunctionSpace(mesh, "CG", 1)
+extracellular_function = df.Function(function_space)
+directory = Path(".")
+name = "indicator"  # TODO: change to conductivity
+with df.XDMFFile(str(directory / "extracellular_conductivity.xdmf")) as ifh:
+    ifh.read_checkpoint(extracellular_function, name, counter=0)
 
 u = df.TrialFunction(function_space)
 v = df.TestFunction(function_space)
 
 dx = df.dx
-F = u*v*dx + df.Constant(1)*v*dx
+F = df.inner(extracellular_function*df.grad(u), df.grad(v))*dx + df.Constant(1)*v*dx
 
 a = df.lhs(F)
 L = df.rhs(F)
 
 A = df.assemble(a)
 b = df.assemble(L)
+
+bcs = df.DirichletBC(function_space, df.Constant(0), df.DomainBoundary())
+bcs.apply(A, b)
 
 solver = df.KrylovSolver("cg", "petsc_amg")
 solver.set_operator(A)
@@ -27,3 +38,5 @@ solution = df.Function(function_space)
 solver.solve(solution.vector(), b)
 
 print("||solution||_L2:", solution.vector().norm("l2"))
+
+df.File("poisson.pvd") << solution
