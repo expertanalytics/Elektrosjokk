@@ -103,6 +103,10 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     splitting_parameters["BidomainSolver"]["algorithm"] = "gmres"
     splitting_parameters["BidomainSolver"]["preconditioner"] = "amg"
 
+    # Physical parameters
+    splitting_parameters["BidomainSolver"]["Chi"] = 1.26e3
+    splitting_parameters["BidomainSolver"]["Cm"] = 1.0
+
     solver = MultiCellSplittingSolver(
         model=brain,
         parameter_map=odemap,
