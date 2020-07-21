@@ -8,14 +8,14 @@ with df.XDMFFile(str(mesh_directory / "brain_64.xdmf")) as mesh_reader:
     mesh_reader.read(mesh)
 mesh.coordinates()[:] /= 10     # Convert to cm
 
-function_space = df.TensorFunctionSpace(mesh, "CG", 1)
-
-extracellular_function = df.Function(function_space)
+tensor_function_space = df.TensorFunctionSpace(mesh, "CG", 1)       # Use DG???
+extracellular_function = df.Function(tensor_function_space)
 directory = Path(".")
 name = "indicator"  # TODO: change to conductivity
 with df.XDMFFile(str(directory / "extracellular_conductivity.xdmf")) as ifh:
     ifh.read_checkpoint(extracellular_function, name, counter=0)
 
+function_space = df.FunctionSpace(mesh, "CG", 1)
 u = df.TrialFunction(function_space)
 v = df.TestFunction(function_space)
 
