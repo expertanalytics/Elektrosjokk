@@ -34,11 +34,18 @@ logger = logging.getLogger(__name__)
 def main():
     casedir = Path(".")
     casename = "e9591a1d"
-    hull_mesh_name = "brain_128.xml"
+
+    # hull_mesh_name = "brain_128.xml"
+    hull_mesh_directory = Path.home() / "Documents/brain3d/skull_mesh"
+    hull_mesh_name = "test.xdmf"
     loader_spec = LoaderSpec(casedir=casedir / casename)
 
     loader = Loader(loader_spec)
-    hull_mesh = df.Mesh(hull_mesh_name)
+
+    hull_mesh = df.Mesh()
+    with df.XDMFFile(str(hull_mesh_directory / hull_mesh_name)) as hull_mesh_file:
+        hull_mesh_file.read(hull_mesh)
+
     logger.info(f"Read hull mesh: {hull_mesh_name}")
 
     function_space_hull = df.FunctionSpace(hull_mesh, "CG", 1)
@@ -46,7 +53,7 @@ def main():
     v = df.TestFunction(function_space_hull)
 
     a = df.inner(df.grad(u), df.grad(v))*df.dx
-    L = df.Constant(1)*v*df.dx
+    L = df.Constant(0)*v*df.dx
 
     A = df.assemble(a)
     b = df.assemble(L)
@@ -95,20 +102,19 @@ def main():
 
         # interpolate between meshens
         bc_func = interpolate_nonmatching_mesh(brain_ue, function_space_hull)
-        logger.debug(f"Boundary condition norm: {time, bc_func.vector.norm('l2')}")
+        logger.debug(f"Boundary condition norm: {time, bc_func.vector().norm('l2')}")
 
-        # FIXME: Insert mesh function here!
+        # TODO: I hope this is the right tag
         boundary_condition = df.DirichletBC(function_space_hull, bc_func, facet_function, 1)
-        # boundary_condition = df.DirichletBC(function_space_hull, bc_func, df.DomainBoundary())
         boundary_condition.apply(A, b)
 
         solver.solve(solution_function.vector(), b)
-        logger.info(time, solution_function.vector().norm("l"))
-
-        # TODO: add a post.Saver and so on
-        # TODO: Store the time in some manner
+        logger.info(f"time: {time}, norm: {solution_function.vector().norm('l2')}")
 
         saver.update(time, timestep, {"u_poisson": solution_function})
 
-
     saver.close()
+
+
+if __name__ == "__main__":
+    main()

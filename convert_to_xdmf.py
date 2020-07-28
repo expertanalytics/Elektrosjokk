@@ -111,5 +111,4 @@ if __name__ == "__main__":
     write_mesh(mesh_data.points, mesh_data.cells, output_name)
     write_mesh_function(mesh_data.points, mesh_data.cells, mesh_data.cell_data, f"{output_name}_cf")
     write_mesh_function(mesh_data.points, mesh_data.lines, mesh_data.facet_data, f"{output_name}_ff")
-
-    # test_fenics_read("foo", "test")
+# test_fenics_read("foo", "test")

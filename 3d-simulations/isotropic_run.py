@@ -42,6 +42,22 @@ from postfields import (
     PointField,
 )
 
+import logging
+
+
+LOG_FILE_NAME = "isotropic_log"
+logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
+logger = logging.getLogger()
+
+fileHandler = logging.FileHandler(f"{LOG_FILE_NAME}.log")
+fileHandler.setFormatter(logFormatter)
+logger.addHandler(fileHandler)
+
+consoleHandler = logging.StreamHandler()
+consoleHandler.setFormatter(logFormatter)
+logger.addHandler(consoleHandler)
+
+
 df.parameters["form_compiler"]["cpp_optimize"] = True
 flags = ["-O3", "-ffast-math", "-march=native"]
 df.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
@@ -186,8 +202,8 @@ if __name__ == "__main__":
         for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve(0, T, dt)):
             norm = vur.vector().norm('l2')
             if math.isnan(norm):
-                assert False, "nan nan nan"
-            print(f"{i} -- {brain.time(0):.5f} -- {norm:.6e}")
+                raise ValueError("Solution diverged")
+            logger.info(f"{i} -- {brain.time(0):.5f} -- {norm:.6e}")
 
             update_dict = dict()
             if saver.update_this_timestep(field_names=["u", "v"], timestep=i, time=brain.time(0)):
@@ -206,7 +222,7 @@ if __name__ == "__main__":
         saver.close()
         tock = time.perf_counter()
         max_memory_usage = resource_usage.ru_maxrss/1e6  # Kb to Gb
-        print("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
-        print("Execution time: {:.2f} s".format(tock - tick))
+        logger.info("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
+        logger.info("Execution time: {:.2f} s".format(tock - tick))
 
     run(1, 4, 8)
