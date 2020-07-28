@@ -66,6 +66,7 @@ def get_brain(*, conductivity: float):
     time_constant = df.Constant(0)
 
     # Realistic mesh
+    # mesh_directory = Path("meshes")
     mesh_directory = Path.home() / "Documents/brain3d/meshes"
     mesh_name = "brain_64"
     mesh, cell_function = get_mesh(mesh_directory, mesh_name)
@@ -129,6 +130,7 @@ def get_saver(
 
     saver_parameters = SaverSpec(casedir=outpath, overwrite_casedir=True)
     saver = Saver(saver_parameters)
+    saver.store_mesh(brain.mesh, brain.cell_domains)
 
     field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=20)
     saver.add_field(Field("v", field_spec_checkpoint))
@@ -154,7 +156,7 @@ if __name__ == "__main__":
     def run(conductivity, Ks, Ku):
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         dt = 0.05
-        T = 1e3
+        T = 10*dt
         brain = get_brain(conductivity=conductivity)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 

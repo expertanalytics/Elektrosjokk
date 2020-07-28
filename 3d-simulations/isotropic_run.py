@@ -28,7 +28,8 @@ from postutils import (
     store_sourcefiles,
     simulation_directory,
     get_mesh,
-    get_indicator_function
+    get_indicator_function,
+    get_current_time_mpi,
 )
 
 from postspec import (
@@ -66,6 +67,7 @@ def get_brain(*, conductivity: float):
     time_constant = df.Constant(0)
 
     # Realistic mesh
+    # mesh_directory = Path("meshes")
     mesh_directory = Path.home() / "Documents/brain3d/meshes"
     mesh_name = "brain_32"
     mesh, cell_function = get_mesh(mesh_directory, mesh_name)
@@ -98,11 +100,10 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     # odemap.add_ode(21, odesolver_module.Cressman(Ku))
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
+    # cg, petsc_amg runs on saga
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
-    # splitting_parameters["BidomainSolver"]["algorithm"] = "default"
-    # splitting_parameters["BidomainSolver"]["preconditioner"] = "petsc_amg"
-    splitting_parameters["BidomainSolver"]["algorithm"] = "gmres"
-    splitting_parameters["BidomainSolver"]["preconditioner"] = "amg"
+    splitting_parameters["BidomainSolver"]["algorithm"] = "cg"
+    splitting_parameters["BidomainSolver"]["preconditioner"] = "petsc_amg"
 
     # Physical parameters
     splitting_parameters["BidomainSolver"]["Chi"] = 1.26e3
@@ -130,12 +131,13 @@ def get_saver(
 
     saver_parameters = SaverSpec(casedir=outpath, overwrite_casedir=True)
     saver = Saver(saver_parameters)
+    saver.store_mesh(brain.mesh, brain.cell_domains)
 
-    field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=20)
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint"), stride_timestep=1)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    field_spec_checkpoint = FieldSpec(save_as=("hdf5"), stride_timestep=20*1000)
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint"), stride_timestep=1)
     saver.add_field(Field("vs", field_spec_checkpoint))
 
     points = np.zeros((10, 3))
@@ -155,10 +157,11 @@ if __name__ == "__main__":
     def run(conductivity, Ks, Ku):
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         dt = 0.05
-        T = 1e3
+        T = 10*dt
         brain = get_brain(conductivity=conductivity)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 
+        current_time = get_current_time_mpi()
         if df.MPI.rank(df.MPI.comm_world) == 0:
             current_time = datetime.datetime.now()
         else:
