@@ -114,10 +114,8 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
-    # splitting_parameters["BidomainSolver"]["algorithm"] = "default"
-    # splitting_parameters["BidomainSolver"]["preconditioner"] = "petsc_amg"
-    splitting_parameters["BidomainSolver"]["algorithm"] = "gmres"
-    splitting_parameters["BidomainSolver"]["preconditioner"] = "amg"
+    splitting_parameters["BidomainSolver"]["algorithm"] = "cg"
+    splitting_parameters["BidomainSolver"]["preconditioner"] = "petsc_amg"
 
     # Physical parameters
     splitting_parameters["BidomainSolver"]["Chi"] = 1.26e3
@@ -147,11 +145,11 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh, brain.cell_domains)
 
-    field_spec_checkpoint = FieldSpec(save_as=("xdmf", "hdf5"), stride_timestep=20)
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    field_spec_checkpoint = FieldSpec(save_as=("hdf5"), stride_timestep=20*1000)
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20*1000)
     saver.add_field(Field("vs", field_spec_checkpoint))
 
     points = np.zeros((10, 3))
@@ -189,7 +187,7 @@ if __name__ == "__main__":
                  "Ks": Ks,
                  "Ku": Ku
             },
-            directory_name="brain3d"
+            directory_name="brain3d_anisotropic"
         )
 
         saver = get_saver(brain=brain, outpath=identifier)
@@ -200,7 +198,7 @@ if __name__ == "__main__":
             norm = vur.vector().norm('l2')
             if math.isnan(norm):
                 raise ValueError("Solution diverged")
-            logging.info(f"{i} -- {brain.time(0):.5f} -- {norm:.6e}")
+            logger.info(f"{i} -- {brain.time(0):.5f} -- {norm:.6e}")
 
             update_dict = dict()
             if saver.update_this_timestep(field_names=["u", "v"], timestep=i, time=brain.time(0)):
@@ -219,7 +217,7 @@ if __name__ == "__main__":
         saver.close()
         tock = time.perf_counter()
         max_memory_usage = resource_usage.ru_maxrss/1e6  # Kb to Gb
-        logging.info("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
-        logging.info("Execution time: {:.2f} s".format(tock - tick))
+        logger.info("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
+        logger.info("Execution time: {:.2f} s".format(tock - tick))
 
     run(1, 4, 8)

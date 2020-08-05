@@ -85,7 +85,7 @@ def get_brain(*, conductivity: float):
     # Realistic mesh
     # mesh_directory = Path("meshes")
     mesh_directory = Path.home() / "Documents/brain3d/meshes"
-    mesh_name = "brain_32"
+    mesh_name = "brain_64"
     mesh, cell_function = get_mesh(mesh_directory, mesh_name)
     mesh.coordinates()[:] /= 10
     indicator_function = get_indicator_function(mesh_directory / f"{mesh_name}_indicator.xdmf", mesh)
@@ -172,7 +172,7 @@ if __name__ == "__main__":
 
     def run(conductivity, Ks, Ku):
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
-        dt = 0.05
+        dt = 0.025
         T = 10*dt
         brain = get_brain(conductivity=conductivity)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
@@ -192,7 +192,7 @@ if __name__ == "__main__":
                  "Ks": Ks,
                  "Ku": Ku
             },
-            directory_name="brain3d"
+            directory_name="brain3d_isotropic"
         )
 
         saver = get_saver(brain=brain, outpath=identifier)
