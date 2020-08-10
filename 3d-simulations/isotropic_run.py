@@ -3,6 +3,7 @@ import datetime
 import resource
 import time
 import math
+import socket
 
 import typing as tp
 
@@ -83,8 +84,14 @@ def get_brain(*, conductivity: float):
     time_constant = df.Constant(0)
 
     # Realistic mesh
-    # mesh_directory = Path("meshes")
-    mesh_directory = Path.home() / "Documents/brain3d/meshes"
+    _hostname = socket.gethostname()
+    logger.debug("Hostname: {_hostname}")
+    if "saga" in _hostname:
+        mesh_directory = Path("meshes")
+    else:
+        mesh_directory = Path.home() / "Documents/brain3d/meshes"
+    logger.info(f"Using mesh directory {mesh_directory}")
+
     mesh_name = "brain_64"
     mesh, cell_function = get_mesh(mesh_directory, mesh_name)
     mesh.coordinates()[:] /= 10
