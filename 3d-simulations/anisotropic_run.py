@@ -7,6 +7,7 @@ import math
 import typing as tp
 
 from pathlib import Path
+from collections import namedtuple
 
 import numpy as np
 import dolfin as df
@@ -61,41 +62,58 @@ flags = ["-O3", "-ffast-math", "-march=native"]
 df.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
 df.parameters["form_compiler"]["quadrature_degree"] = 3
 
+CONDUCTIVITY_TUPLE = namedtuple("CONDUCTIVITY_TUPLE", ["intracellular", "extracellular"])
 
-def get_conductivities(mesh, directory: Path) -> tp.Tuple[df.Function, df.Function]:
+
+def get_conductivities(
+    *,
+    mesh: df.Mesh,
+    mesh_name: str,
+    mesh_directory: Path
+) -> tp.Tuple[df.Function, df.Function]:
     function_space = df.TensorFunctionSpace(mesh, "CG", 1)
     extracellular_function = df.Function(function_space)
     intracellular_function = df.Function(function_space)
 
-    name = "indicator"  #TODO: change to conductivity
-    with df.XDMFFile(str(directory / "extracellular_conductivity.xdmf")) as ifh:
+    extracellular_file_name = f"{mesh_directory / mesh_name}_intracellular_conductivity.xdmf"
+    intracellular_file_name = f"{mesh_directory / mesh_name}_extracellular_conductivity.xdmf"
+
+    name = "conductivity"  #TODO: change to conductivity
+    with df.XDMFFile(str(extracellular_file_name)) as ifh:
         ifh.read_checkpoint(extracellular_function, name, counter=0)
 
-    with df.XDMFFile(str(directory / "intracellular_conductivity.xdmf")) as ifh:
+    with df.XDMFFile(str(intracellular_file_name)) as ifh:
         ifh.read_checkpoint(intracellular_function, name, counter=0)
 
-    return intracellular_function, extracellular_function
+    conductivity_tuple = CONDUCTIVITY_TUPLE(
+        intracellular=intracellular_function,
+        extracellular=extracellular_function
+    )
+    return conductivity_tuple
 
 
-def get_brain(*, conductivity: float):
+def get_brain(mesh_name: str):
     time_constant = df.Constant(0)
 
     # Realistic mesh
     # mesh_directory = Path("meshes")
     mesh_directory = Path.home() / "Documents/brain3d/meshes"
-    mesh_name = "brain_64"
     mesh, cell_function = get_mesh(mesh_directory, mesh_name)
     mesh.coordinates()[:] /= 10
     indicator_function = get_indicator_function(mesh_directory / f"{mesh_name}_indicator.xdmf", mesh)
 
     # 1 -- GM, 2 -- WM
-    Mi, Me = get_conductivities(mesh, Path("."))
+    conductivity_tuple = get_conductivities(
+        mesh=mesh,
+        mesh_name=mesh_name,
+        mesh_directory=mesh_directory
+    )
 
     brain = Model(
         domain=mesh,
         time=time_constant,
-        M_i=Mi,
-        M_e=Me,
+        M_i=conductivity_tuple.intracellular,
+        M_e=conductivity_tuple.extracellular,
         cell_models=Cressman(),      # Default parameters
         cell_domains=cell_function,
         indicator_function=indicator_function
@@ -166,11 +184,11 @@ def get_saver(
 if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
-    def run(conductivity, Ks, Ku):
+    def run(Ks: float, Ku: float, mesh_name: str):
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
-        dt = 0.05
+        dt = 0.025
         T = 10*dt
-        brain = get_brain(conductivity=conductivity)
+        brain = get_brain(mesh_name)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 
         if df.MPI.rank(df.MPI.comm_world) == 0:
@@ -182,10 +200,9 @@ if __name__ == "__main__":
         identifier = simulation_directory(
             home=Path("."),
             parameters={
-                 "time": current_time,
-                 "conductivity": conductivity,
-                 "Ks": Ks,
-                 "Ku": Ku
+                "time": current_time,
+                "Ks": Ks,
+                "Ku": Ku
             },
             directory_name="brain3d_anisotropic"
         )
@@ -220,4 +237,4 @@ if __name__ == "__main__":
         logger.info("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
         logger.info("Execution time: {:.2f} s".format(tock - tick))
 
-    run(1, 4, 8)
+    run(4, 8, "brain_32")
