@@ -10,10 +10,14 @@ mesh.coordinates()[:] /= 10     # Convert to cm
 
 tensor_function_space = df.TensorFunctionSpace(mesh, "CG", 1)       # Use DG???
 extracellular_function = df.Function(tensor_function_space)
-directory = Path(".")
-name = "indicator"  # TODO: change to conductivity
-with df.XDMFFile(str(directory / "extracellular_conductivity.xdmf")) as ifh:
+directory = Path.home() / "Documents" / "brain3d" / "meshes"
+name = "conductivity"  # TODO: change to conductivity
+# with df.XDMFFile(str(directory / "foo.xdmf")) as ifh:
+with df.XDMFFile(str(directory / "brain_64_intracellular_conductivity.xdmf")) as ifh:
     ifh.read_checkpoint(extracellular_function, name, counter=0)
+# name = "indicator"  # TODO: change to conductivity
+# with df.XDMFFile(str(directory / "extracellular_conductivity.xdmf")) as ifh:
+#     ifh.read_checkpoint(extracellular_function, name, counter=0)
 
 function_space = df.FunctionSpace(mesh, "CG", 1)
 u = df.TrialFunction(function_space)
@@ -31,7 +35,7 @@ b = df.assemble(L)
 bcs = df.DirichletBC(function_space, df.Constant(0), df.DomainBoundary())
 bcs.apply(A, b)
 
-solver = df.KrylovSolver("cg", "petsc_amg")
+solver = df.KrylovSolver("gmres", "petsc_amg")
 solver.set_operator(A)
 
 solution = df.Function(function_space)

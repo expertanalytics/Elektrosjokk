@@ -86,10 +86,10 @@ def get_brain(*, conductivity: float):
     # Realistic mesh
     _hostname = socket.gethostname()
     logger.debug("Hostname: {_hostname}")
-    if "saga" in _hostname:
-        mesh_directory = Path("meshes")
-    else:
+    if "debian" in _hostname:
         mesh_directory = Path.home() / "Documents/brain3d/meshes"
+    else:
+        mesh_directory = Path("meshes")
     logger.info(f"Using mesh directory {mesh_directory}")
 
     mesh_name = "brain_64"

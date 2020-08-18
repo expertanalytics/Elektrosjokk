@@ -99,10 +99,10 @@ def get_brain(mesh_name: str):
     # Realistic mesh
     _hostname = socket.gethostname()
     logger.debug("Hostname: {_hostname}")
-    if "saga" in _hostname:
-        mesh_directory = Path("meshes")
-    else:
+    if "debian" in _hostname:
         mesh_directory = Path.home() / "Documents/brain3d/meshes"
+    else:
+        mesh_directory = Path("meshes")
     logger.info(f"Using mesh directory {mesh_directory}")
 
     mesh, cell_function = get_mesh(mesh_directory, mesh_name)
@@ -139,7 +139,13 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
-    splitting_parameters["BidomainSolver"]["algorithm"] = "cg"
+
+    # # gmres
+    # ## petsc_amg, ilu,
+
+    # # bicgstab, tfqmr
+    # ## ilu
+    splitting_parameters["BidomainSolver"]["algorithm"] = "gmres"
     splitting_parameters["BidomainSolver"]["preconditioner"] = "petsc_amg"
 
     # Physical parameters
@@ -192,6 +198,9 @@ if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
     def run(Ks: float, Ku: float, mesh_name: str):
+        logger.info(f"mesh name: {mesh_name}")
+        logger.info(f"Ks: {Ks}")
+        logger.info(f"Ku: {Ku}")
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         dt = 0.025
         T = 10*dt

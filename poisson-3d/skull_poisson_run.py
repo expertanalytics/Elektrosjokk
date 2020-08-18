@@ -133,8 +133,16 @@ def main():
         directory_name="skull3d"
     )
 
+    with open(outpath / "args.txt", "w") as arg_file:
+        arg_file.write(f"casedir: {args.casedir}\n")
+        arg_file.write(f"skull: {args.skull}\n")
+        arg_file.write(f"brain_tag: {args.brain_tag}\n")
+        arg_file.write(f"facet_function: {args.facet_function}\n")
+
+
     source_files = ["skull_poisson_run.py"]
     store_sourcefiles(map(Path, source_files), outpath)
+
     saver_parameters = SaverSpec(casedir=outpath, overwrite_casedir=True)
     saver = Saver(saver_parameters)
     saver.store_mesh(skull_mesh, facet_function)
