@@ -178,9 +178,11 @@ def get_saver(
     brain: Model,
     outpath: Path,
 ) -> Saver:
-    sourcefiles = [
-        "anisotropic_run.py",
-    ]
+    sourcefiles = ["anisotropic_run.py"]
+    jobscript_path = Path("jobscript_anisotropic.slurm")
+    if jobscript_path.is_file():
+        sourcefiles += [str(jobscript_path)]        # not usre str() is necessary
+
     store_sourcefiles(map(Path, sourcefiles), outpath)
 
     saver_parameters = SaverSpec(casedir=outpath, overwrite_casedir=True)
