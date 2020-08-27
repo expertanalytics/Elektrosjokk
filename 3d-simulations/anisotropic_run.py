@@ -1,6 +1,5 @@
 import warnings
 import datetime
-import resource
 import time
 import math
 import socket
@@ -75,7 +74,7 @@ def get_conductivities(
     mesh_directory: Path,
     anisotropy_type: str
 ) -> tp.Tuple[df.Function, df.Function]:
-    function_space = df.TensorFunctionSpace(mesh, "CG", 1)
+    function_space = df.TensorFunctionSpace(mesh, "DG", 0)
     extracellular_function = df.Function(function_space)
     intracellular_function = df.Function(function_space)
 
@@ -131,7 +130,7 @@ def get_brain(mesh_name: str, anisotropy_type: str):
     brain = Model(
         domain=mesh,
         time=time_constant,
-        M_i={2: conductivity_tuple.intracellular, 1: M_i_gray}
+        M_i={2: conductivity_tuple.intracellular, 1: M_i_gray},
         M_e={2: conductivity_tuple.extracellular, 1: M_e_gray},
         cell_models=Cressman(),      # Default parameters
         cell_domains=cell_function,
@@ -257,9 +256,6 @@ if __name__ == "__main__":
         logger.info(f"mesh name: {mesh_name}")
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
-        resource_usage = resource.getrusage(resource.RUSAGE_SELF)
-        dt = 0.025
-        T = 10*dt
         brain = get_brain(mesh_name, anisotropy)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 
@@ -305,8 +301,6 @@ if __name__ == "__main__":
 
         saver.close()
         tock = time.perf_counter()
-        max_memory_usage = resource_usage.ru_maxrss/1e6  # Kb to Gb
-        logger.info("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
         logger.info("Execution time: {:.2f} s".format(tock - tick))
 
     parser = create_argument_parser()

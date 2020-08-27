@@ -1,6 +1,5 @@
 import warnings
 import datetime
-import resource
 import time
 import math
 import socket
@@ -208,7 +207,6 @@ if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
     def run(*, conductivity: float, Ks: float, Ku: float, mesh_name: str, dt: float, T: float):
-        resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         brain = get_brain(mesh_name=mesh_name, conductivity=conductivity)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 
@@ -256,8 +254,6 @@ if __name__ == "__main__":
 
         saver.close()
         tock = time.perf_counter()
-        max_memory_usage = resource_usage.ru_maxrss/1e6  # Kb to Gb
-        logger.info("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
         logger.info("Execution time: {:.2f} s".format(tock - tick))
 
     parser = create_argument_parser()
