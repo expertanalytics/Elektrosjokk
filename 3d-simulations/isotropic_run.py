@@ -4,6 +4,7 @@ import resource
 import time
 import math
 import socket
+import argparse
 
 import typing as tp
 
@@ -80,7 +81,7 @@ def get_conductivities(mesh, directory: Path) -> tp.Tuple[df.Function, df.Functi
     return intracellular_function, extracellular_function
 
 
-def get_brain(*, conductivity: float):
+def get_brain(*, mesh_name: str, conductivity: float) -> Model:
     time_constant = df.Constant(0)
 
     # Realistic mesh
@@ -92,7 +93,6 @@ def get_brain(*, conductivity: float):
         mesh_directory = Path("meshes")
     logger.info(f"Using mesh directory {mesh_directory}")
 
-    mesh_name = "brain_64"
     mesh, cell_function = get_mesh(mesh_directory, mesh_name)
     mesh.coordinates()[:] /= 10
     indicator_function = get_indicator_function(mesh_directory / f"{mesh_name}_indicator.xdmf", mesh)
@@ -174,14 +174,42 @@ def get_saver(
     return saver
 
 
+def create_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "-T",
+        "--final-time",
+        help="Solve the model in the time interval (0, T). Given in ms",
+        type=float,
+        required=True
+    )
+
+    parser.add_argument(
+        "-dt",
+        "--timestep",
+        help="The timestep dt, Given in ms.",
+        type=float,
+        required=False,
+        default=0.025
+    )
+
+    parser.add_argument(
+        "--mesh-name",
+        help="The name of the mesh (excluding suffix). It serves as a prefix to conductivities.",
+        type=str,
+        required=True
+    )
+
+    return parser
+
+
 if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
-    def run(conductivity, Ks, Ku):
+    def run(*, conductivity: float, Ks: float, Ku: float, mesh_name: str, dt: float, T: float):
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
-        dt = 0.025
-        T = 10*dt
-        brain = get_brain(conductivity=conductivity)
+        brain = get_brain(mesh_name=mesh_name, conductivity=conductivity)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 
         current_time = get_current_time_mpi()
@@ -232,4 +260,6 @@ if __name__ == "__main__":
         logger.info("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
         logger.info("Execution time: {:.2f} s".format(tock - tick))
 
-    run(1, 4, 8)
+    parser = create_argument_parser()
+    args = parser.parse_args()
+    run(conductivity=1, Ks=4, Ku=8, mesh_name=args.mesh_name, dt=args.timestep, T=args.final_time)

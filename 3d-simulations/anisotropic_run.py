@@ -4,6 +4,7 @@ import resource
 import time
 import math
 import socket
+import argparse
 
 import typing as tp
 
@@ -19,6 +20,7 @@ from xalbrain import (
     MultiCellSolver,
     BidomainSolver,
 )
+
 
 from extension_modules import load_module
 
@@ -70,14 +72,15 @@ def get_conductivities(
     *,
     mesh: df.Mesh,
     mesh_name: str,
-    mesh_directory: Path
+    mesh_directory: Path,
+    anisotropy_type: str
 ) -> tp.Tuple[df.Function, df.Function]:
     function_space = df.TensorFunctionSpace(mesh, "CG", 1)
     extracellular_function = df.Function(function_space)
     intracellular_function = df.Function(function_space)
 
-    extracellular_file_name = f"{mesh_directory / mesh_name}_intracellular_conductivity.xdmf"
-    intracellular_file_name = f"{mesh_directory / mesh_name}_extracellular_conductivity.xdmf"
+    extracellular_file_name = f"{mesh_directory / mesh_name}_intracellular_conductivity_{anisotropy_type}.xdmf"
+    intracellular_file_name = f"{mesh_directory / mesh_name}_extracellular_conductivity_{anisotropy_type}.xdmf"
 
     name = "conductivity"  #TODO: change to conductivity
     with df.XDMFFile(str(extracellular_file_name)) as ifh:
@@ -93,7 +96,7 @@ def get_conductivities(
     return conductivity_tuple
 
 
-def get_brain(mesh_name: str):
+def get_brain(mesh_name: str, anisotropy_type: str):
     time_constant = df.Constant(0)
 
     # Realistic mesh
@@ -113,7 +116,8 @@ def get_brain(mesh_name: str):
     conductivity_tuple = get_conductivities(
         mesh=mesh,
         mesh_name=mesh_name,
-        mesh_directory=mesh_directory
+        mesh_directory=mesh_directory,
+        anisotropy_type=anisotropy_type
     )
 
     brain = Model(
@@ -194,17 +198,61 @@ def get_saver(
     return saver
 
 
+def create_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "-T",
+        "--final-time",
+        help="Solve the model in the time interval (0, T). Given in ms",
+        type=float,
+        required=True
+    )
+
+    parser.add_argument(
+        "-dt",
+        "--timestep",
+        help="The timestep dt, Given in ms.",
+        type=float,
+        required=False,
+        default=0.025
+    )
+
+    parser.add_argument(
+        "--mesh-name",
+        help="The name of the mesh (excluding suffix). It serves as a prefix to conductivities.",
+        type=str,
+        required=True
+    )
+
+    parser.add_argument(
+        "--anisotropy",     # dummy, constant, dti
+        help="The type of anisotropy. Fits the ending of a conductivity function." \
+        "Supported: 'dti', 'constant', 'dummy'",
+        type=str,
+        required=True,
+    )
+
+    return parser
+
+
+def validate_arguments(args: tp.Any) -> None:
+    valid_anisotropy = {"dti", "constant", "dummy"}
+    if not args.anisotropy in valid_anisotropy:
+        raise ValueError(f"Unknown anisotropy: expects {valid_anisotropy}")
+
+
 if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
-    def run(Ks: float, Ku: float, mesh_name: str):
+    def run(*, Ks: float, Ku: float, mesh_name: str, dt: float, T: float, anisotropy: str) -> None:
         logger.info(f"mesh name: {mesh_name}")
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
         resource_usage = resource.getrusage(resource.RUSAGE_SELF)
         dt = 0.025
         T = 10*dt
-        brain = get_brain(mesh_name)
+        brain = get_brain(mesh_name, anisotropy)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 
         if df.MPI.rank(df.MPI.comm_world) == 0:
@@ -253,4 +301,14 @@ if __name__ == "__main__":
         logger.info("Max memory usage: {:3.1f} Gb".format(max_memory_usage))
         logger.info("Execution time: {:.2f} s".format(tock - tick))
 
-    run(4, 8, "brain_32")
+    parser = create_argument_parser()
+    args = parser.parse_args()
+    validate_arguments(args)
+    run(
+        Ks=4,
+        Ku=8,
+        mesh_name=args.mesh_name,
+        dt=args.timestep,
+        T=args.final_time,
+        anisotropy=args.anisotropy
+    )
