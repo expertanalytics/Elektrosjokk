@@ -1,5 +1,4 @@
-import warnings
-import datetime
+import warnings import datetime
 import time
 import math
 import socket
@@ -272,7 +271,11 @@ if __name__ == "__main__":
             parameters={
                 "time": current_time,
                 "Ks": Ks,
-                "Ku": Ku
+                "Ku": Ku,
+                "mesh-name": mesh_name,
+                "dt": dt,
+                "T": T,
+                "anisotropy": anisotropy
             },
             directory_name="brain3d_anisotropic"
         )
