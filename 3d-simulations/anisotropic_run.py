@@ -120,11 +120,19 @@ def get_brain(mesh_name: str, anisotropy_type: str):
         anisotropy_type=anisotropy_type
     )
 
+    # Dougherty et. al. 2014 -- They are not explicit about the anisotropy
+    # I will follow the methof from Lee et. al. 2013, but use numbers from Dougherty
+    M_i_gray = 1.0      # Dougherty
+
+    # Doughert et. al 2014
+    M_e_gray = 2.78     # Dougherty
+    # M_e_white = 1.26    # Dougherty
+
     brain = Model(
         domain=mesh,
         time=time_constant,
-        M_i=conductivity_tuple.intracellular,
-        M_e=conductivity_tuple.extracellular,
+        M_i={2: conductivity_tuple.intracellular, 1: M_i_gray}
+        M_e={2: conductivity_tuple.extracellular, 1: M_e_gray},
         cell_models=Cressman(),      # Default parameters
         cell_domains=cell_function,
         indicator_function=indicator_function

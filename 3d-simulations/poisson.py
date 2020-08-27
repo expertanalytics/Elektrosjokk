@@ -3,8 +3,9 @@ from pathlib import Path
 
 
 mesh = df.Mesh()
+mesh_name = "brain_64"
 mesh_directory = Path.home() / "Documents" / "brain3d" / "meshes"
-with df.XDMFFile(str(mesh_directory / "brain_64.xdmf")) as mesh_reader:
+with df.XDMFFile(str(mesh_directory / f"{mesh_name}.xdmf")) as mesh_reader:
     mesh_reader.read(mesh)
 mesh.coordinates()[:] /= 10     # Convert to cm
 
@@ -13,7 +14,7 @@ extracellular_function = df.Function(tensor_function_space)
 directory = Path.home() / "Documents" / "brain3d" / "meshes"
 name = "conductivity"  # TODO: change to conductivity
 # with df.XDMFFile(str(directory / "foo.xdmf")) as ifh:
-with df.XDMFFile(str(directory / "brain_64_intracellular_conductivity.xdmf")) as ifh:
+with df.XDMFFile(str(directory / f"{mesh_name}_intracellular_conductivity.xdmf")) as ifh:
     ifh.read_checkpoint(extracellular_function, name, counter=0)
 # name = "indicator"  # TODO: change to conductivity
 # with df.XDMFFile(str(directory / "extracellular_conductivity.xdmf")) as ifh:
@@ -24,7 +25,8 @@ u = df.TrialFunction(function_space)
 v = df.TestFunction(function_space)
 
 dx = df.dx
-F = df.inner(extracellular_function*df.grad(u), df.grad(v))*dx + df.Constant(1)*v*dx
+F = df.inner(df.dot(extracellular_function, df.grad(u)), df.grad(v))*dx + df.Constant(1)*v*dx
+# F = df.inner(df.grad(u), df.grad(v))*dx + df.Constant(1)*v*dx
 
 a = df.lhs(F)
 L = df.rhs(F)
@@ -43,4 +45,6 @@ solver.solve(solution.vector(), b)
 
 print("||solution||_L2:", solution.vector().norm("l2"))
 
-df.File("poisson.pvd") << solution
+with df.XDMFFile("poisson.xdmf") as out_file:
+    out_file.write_checkpoint(solution, "poisson", 0)
+# df.File("poisson.pvd") << solution
