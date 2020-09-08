@@ -66,6 +66,14 @@ def create_argument_parser() -> argparse.ArgumentParser:
         default=None,
     )
 
+    parser.add_argument(
+        "--num-steps",
+        help="Maxumum number of steps",
+        required=False,
+        default=int(1e16),
+        type=int
+    )
+
     return parser
 
 
@@ -159,8 +167,8 @@ def main():
         if timestep >= args.num_steps:
             logger.info(f"Max timestep exceeded: {timestep} >= {args.num_steps}")
             break
-        norm = solution_time, brain_ue.vector().norm("l2")
-        logger.debug(f"timestep: {timestep} --- time, {norm}")
+        norm = brain_ue.vector().norm("l2")
+        logger.debug(f"timestep: {timestep} --- time, {solution_time}, --- norm: {norm}")
 
         # interpolate between meshens
         bc_func = interpolate_nonmatching_mesh(brain_ue, function_space_hull)
