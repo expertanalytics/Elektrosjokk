@@ -81,10 +81,14 @@ def main():
     loader_spec = LoaderSpec(casedir=casedir / casename)
     loader = Loader(loader_spec)
 
+    # Enforce correct suffix
+    mesh_directory = args.skull.parent
+    mesh_name = args.skull.stem
+
     # Read mesh and mesh function
     logger.info(f"Reading skull mesh: {args.skull}")
     skull_mesh = df.Mesh()
-    with df.XDMFFile(str(args.skull)) as hull_mesh_file:
+    with df.XDMFFile(str(mesh_directory / f"{mesh_name}.xdmf")) as hull_mesh_file:
         hull_mesh_file.read(skull_mesh)
 
     if args.facet_function is None:
@@ -152,6 +156,9 @@ def main():
 
     tick = time.perf_counter()
     for timestep, (solution_time, brain_ue) in enumerate(loader.load_checkpoint("u")):        # u is the extracellular potential
+        if timestep >= args.num_steps:
+            logger.info(f"Max timestep exceeded: {timestep} >= {args.num_steps}")
+            break
         norm = solution_time, brain_ue.vector().norm("l2")
         logger.debug(f"timestep: {timestep} --- time, {norm}")
 
