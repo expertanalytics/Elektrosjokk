@@ -31,6 +31,8 @@ from postutils import (
     get_mesh,
     get_indicator_function,
     get_current_time_mpi,
+    store_arguments,
+    check_bounds,
 )
 
 from postspec import (
@@ -143,8 +145,10 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 
 
 def get_saver(
+    *,
     brain: Model,
     outpath: Path,
+    point_path: tp.Optional[Path]
 ) -> Saver:
     sourcefiles = ["isotropic_run.py"]
 
@@ -157,21 +161,23 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh, brain.cell_domains)
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint"), stride_timestep=1)
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint", "hdf5"), stride_timestep=20, num_steps_in_part=None)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint"), stride_timestep=1)
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20*1000, num_steps_in_part=None)
     saver.add_field(Field("vs", field_spec_checkpoint))
 
-    points = np.zeros((10, 3))
-    for i in range(3):
-        points[:, i] = np.linspace(0, 1, 10)
-    point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)
-    saver.add_field(PointField("v_points", point_field_spec, points))
+    if point_path is not None:
+        points = np.loadtxt(str(point_path))
+        points /= 10
+        check_bounds(points, limit=100)
 
-    point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)
-    saver.add_field(PointField("u_points", point_field_spec, points))
+        v_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)  # v
+        saver.add_field(PointField("v_points", v_point_field_spec, points))
+        u_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)  # v
+        saver.add_field(PointField("u_points", v_point_field_spec, points))
+
     return saver
 
 
@@ -202,13 +208,29 @@ def create_argument_parser() -> argparse.ArgumentParser:
         required=True
     )
 
+    parser.add_argument(
+        "--point-path",
+        help="Path to the points used for PointField sampling. Has to support np.loadtxt.",
+        type=Path,
+        required=False,
+    )
+
     return parser
 
 
 if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
-    def run(*, conductivity: float, Ks: float, Ku: float, mesh_name: str, dt: float, T: float):
+    def run(args) -> None:
+        Ks = 4
+        Ku = 8
+        conductivity = 1
+
+        mesh_name = args.mesh_name
+        point_path = args.point_path
+        T = args.final_time
+        dt = args.timestep
+
         brain = get_brain(mesh_name=mesh_name, conductivity=conductivity)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 
@@ -229,8 +251,9 @@ if __name__ == "__main__":
             },
             directory_name="brain3d_isotropic"
         )
+        store_arguments(args=args, out_path=identifier)
 
-        saver = get_saver(brain=brain, outpath=identifier)
+        saver = get_saver(brain=brain, outpath=identifier, point_path=point_path)
 
         tick = time.perf_counter()
 
@@ -260,4 +283,12 @@ if __name__ == "__main__":
 
     parser = create_argument_parser()
     args = parser.parse_args()
-    run(conductivity=1, Ks=4, Ku=8, mesh_name=args.mesh_name, dt=args.timestep, T=args.final_time)
+    run(args)
+        # conductivity=1,
+        # Ks=4,
+        # Ku=8,
+        # mesh_name=args.mesh_name,
+        # dt=args.timestep,
+        # T=args.final_time,
+        # point_path=args.point_path
+    # )

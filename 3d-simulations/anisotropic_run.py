@@ -1,4 +1,5 @@
-import warnings import datetime
+import warnings
+import datetime
 import time
 import math
 import socket
@@ -30,7 +31,9 @@ from postutils import (
     store_sourcefiles,
     simulation_directory,
     get_mesh,
-    get_indicator_function
+    get_indicator_function,
+    store_arguments,
+    check_bounds,
 )
 
 from postspec import (
@@ -41,6 +44,7 @@ from postspec import (
 from postfields import (
     Field,
     PointField,
+    BoundaryField,
 )
 
 import logging
@@ -176,6 +180,7 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 def get_saver(
     brain: Model,
     outpath: Path,
+    point_path: tp.Optional[Path]
 ) -> Saver:
     sourcefiles = ["anisotropic_run.py"]
     jobscript_path = Path("jobscript_anisotropic.slurm")
@@ -188,21 +193,24 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh, brain.cell_domains)
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20)
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint", "hdf5"), stride_timestep=20, num_steps_in_part=None)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20*1000)
+    saver.add_field(BoundaryField("u_boundary", field_spec_checkpoint, brain.mesh))
+
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20*1000, num_steps_in_part=None)
     saver.add_field(Field("vs", field_spec_checkpoint))
 
-    points = np.zeros((10, 3))
-    for i in range(3):
-        points[:, i] = np.linspace(0, 1, 10)
-    point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)
-    saver.add_field(PointField("v_points", point_field_spec, points))
+    if point_path is not None:
+        points = np.loadtxt(str(point_path))
+        points /= 10    # convert to cm
+        check_bounds(points, limit=100)        # check for cm
+        v_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)  # v
+        saver.add_field(PointField("v_points", v_point_field_spec, points))
+        u_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)  # v
+        saver.add_field(PointField("u_points", u_point_field_spec, points))
 
-    point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)
-    saver.add_field(PointField("u_points", point_field_spec, points))
     return saver
 
 
@@ -241,6 +249,13 @@ def create_argument_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
+    parser.add_argument(
+        "--point-path",
+        help="Path to the points used for PointField sampling. Has to support np.loadtxt.",
+        type=Path,
+        required=False,
+    )
+
     return parser
 
 
@@ -253,8 +268,16 @@ def validate_arguments(args: tp.Any) -> None:
 if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
-    def run(*, Ks: float, Ku: float, mesh_name: str, dt: float, T: float, anisotropy: str) -> None:
-        logger.info(f"mesh name: {mesh_name}")
+    # def run(*, Ks: float, Ku: float, mesh_name: str, dt: float, T: float, anisotropy: str) -> None:
+    def run(args) -> None:
+        Ks = 4
+        Ku = 8
+        mesh_name = args.mesh_name
+        anisotropy = args.anisotropy
+        T = args.final_time
+        dt = args.timestep
+
+        logger.info(f"mesh name: {args.mesh_name}")
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
         brain = get_brain(mesh_name, anisotropy)
@@ -279,8 +302,9 @@ if __name__ == "__main__":
             },
             directory_name="brain3d_anisotropic"
         )
+        store_arguments(args=args, out_path=identifier)
 
-        saver = get_saver(brain=brain, outpath=identifier)
+        saver = get_saver(brain=brain, outpath=identifier, point_path=args.point_path)
 
         tick = time.perf_counter()
 
@@ -301,6 +325,9 @@ if __name__ == "__main__":
             if saver.update_this_timestep(field_names=["v_points", "u_points"], timestep=i, time=brain.time(0)):
                 update_dict.update({"v_points": vs, "u_points": vs})
 
+            if saver.update_this_timestep(field_names=["u_boundary"], timestep=i, time=brain.time(0)):
+                update_dict.update({"u_boundary": u})
+
             if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)
 
@@ -311,11 +338,11 @@ if __name__ == "__main__":
     parser = create_argument_parser()
     args = parser.parse_args()
     validate_arguments(args)
-    run(
-        Ks=4,
-        Ku=8,
-        mesh_name=args.mesh_name,
-        dt=args.timestep,
-        T=args.final_time,
-        anisotropy=args.anisotropy
-    )
+    run(args)
+        # Ks=4,
+        # Ku=8,
+        # mesh_name=args.mesh_name,
+        # dt=args.timestep,
+        # T=args.final_time,
+        # anisotropy=args.anisotropy
+    # )

@@ -1,4 +1,5 @@
 import dolfin as df
+import numpy as np
 
 from pathlib import Path
 
@@ -74,6 +75,13 @@ def create_argument_parser() -> argparse.ArgumentParser:
         type=int
     )
 
+    parser.add_argument(
+        "--point-path",
+        help="Path to the points used for PointField sampling. Has to support np.loadtxt.",
+        type=Path,
+        required=False,
+    )
+
     return parser
 
 
@@ -98,9 +106,10 @@ def main():
     skull_mesh = df.Mesh()
     with df.XDMFFile(str(mesh_directory / f"{mesh_name}.xdmf")) as hull_mesh_file:
         hull_mesh_file.read(skull_mesh)
+    skull_mesh.coordinates()[:] /= 10
 
     if args.facet_function is None:
-        facet_function_path = args.skull.parent / f"{args.skull.stem}_mf.xdmf"
+        facet_function_path = args.skull.parent / f"{args.skull.stem}_ff.xdmf"
         if not facet_function_path.exists():
             raise FileNotFoundError(
                 f"Could not find {facet_function_path}. Please specify manually."
@@ -142,7 +151,7 @@ def main():
             "casename": casename,
             "hull_mesh_name": args.skull
         },
-        directory_name="skull3d"
+        directory_name="test_skull3d"
     )
 
     with open(outpath / "args.txt", "w") as arg_file:
@@ -162,8 +171,15 @@ def main():
     field_spec_checkpoint = FieldSpec(save_as=("checkpoint"), stride_timestep=1)
     saver.add_field(Field("u_poisson", field_spec_checkpoint))
 
+    if args.point_path is not None:
+        points = np.loadtxt(str(args.point_path))
+        points /= 10    # convert to cm
+        u_point_field_spec = FieldSpec(stride_timestep=4)  # v
+        saver.add_field(PointField("u_points", u_point_field_spec, points))
+
     tick = time.perf_counter()
-    for timestep, (solution_time, brain_ue) in enumerate(loader.load_checkpoint("u")):        # u is the extracellular potential
+    # for timestep, (solution_time, brain_ue) in enumerate(loader.load_checkpoint("u")):        # u is the extracellular potential
+    for timestep, (solution_time, brain_ue) in enumerate(loader.load_field("u")):        # u is the extracellular potential
         if timestep >= args.num_steps:
             logger.info(f"Max timestep exceeded: {timestep} >= {args.num_steps}")
             break
@@ -172,6 +188,7 @@ def main():
 
         # interpolate between meshens
         bc_func = interpolate_nonmatching_mesh(brain_ue, function_space_hull)
+
         logger.debug(f"Boundary condition norm: {solution_time, bc_func.vector().norm('l2')}")
 
         logger.info(f"Applying boundary condition to tag {args.brain_tag}")
@@ -188,6 +205,7 @@ def main():
         logger.info(f"timestep: {timestep} --- time: {solution_time}, norm: {norm}")
 
         saver.update(solution_time, timestep, {"u_poisson": solution_function})
+        saver.update(solution_time, timestep, {"u_points": solution_function})
 
     tock = time.perf_counter()
     max_memory_usage = resource_usage.ru_maxrss/1e6  # Kb to Gb
