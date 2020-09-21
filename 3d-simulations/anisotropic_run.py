@@ -106,6 +106,8 @@ def get_brain(mesh_name: str, anisotropy_type: str):
     logger.debug("Hostname: {_hostname}")
     if "debian" in _hostname:
         mesh_directory = Path.home() / "Documents/brain3d/meshes"
+    elif "saga" in _hostname:
+        mesh_directory = Path("/cluster/projects/nn9279k/jakobes/meshes")
     else:
         mesh_directory = Path("meshes")
     logger.info(f"Using mesh directory {mesh_directory}")
