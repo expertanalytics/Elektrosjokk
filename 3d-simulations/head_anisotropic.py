@@ -132,26 +132,59 @@ def get_brain(mesh_name: str, anisotropy_type: str):
     M_e_gray = 2.78     # Dougherty
     # M_e_white = 1.26    # Dougherty
 
+    # From "A guideline for head volume conductor modeling in EEG and MEG -- Vorwerk et. al 2014"
+    # CSF = 17.6
+    # skull = 0.1
+    # skin = 4.3
+
+    CSF = 1.0
+    skull = 1.0
+    skin = 1.0
+
+    MI_dict = {
+        # 2: conductivity_tuple.intracellular,
+        2: 1,
+        1: M_i_gray,
+        3: 1e-4,
+        4: 1e-4,
+        5: 1e-4,
+        6: 1e-4
+    }
+
+    ME_dict = {
+        # 2: conductivity_tuple.extracellular,
+        2: 1.26,
+        1: M_e_gray,
+        3: CSF,
+        4: skin,
+        5: skull,
+        6: CSF
+    }
+
+    stimulus_dict = {
+        1: df.Constant(1)
+    }
+
+
     brain = Model(
         domain=mesh,
         time=time_constant,
-        M_i={2: conductivity_tuple.intracellular, 1: M_i_gray, 3: 0},
-        M_e={2: conductivity_tuple.extracellular, 1: M_e_gray, 3: 17.6},
+        M_i=MI_dict,
+        M_e=ME_dict,
         cell_models=Cressman(),      # Default parameters
         cell_domains=cell_function,
-        indicator_function=indicator_function
+        indicator_function=indicator_function,
+        stimulus=stimulus_dict
     )
     return brain
 
 
 def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolver:
-
     odesolver_module = load_module("LatticeODESolver")
+    # Indices are in reference to indicator_function, not cell_function
     odemap = odesolver_module.ODEMap()
     odemap.add_ode(1, odesolver_module.Cressman(Ks))
-    # odemap.add_ode(2, odesolver_module.Cressman(Ku))
-    odemap.add_ode(11, odesolver_module.Cressman(Ks))
-    # odemap.add_ode(21, odesolver_module.Cressman(Ku))
+    odemap.add_ode(11, odesolver_module.Cressman(Ku))
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
@@ -168,6 +201,8 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     splitting_parameters["BidomainSolver"]["Chi"] = 1.26e3
     splitting_parameters["BidomainSolver"]["Cm"] = 1.0
 
+    splitting_parameters["apply_stimulus_current_to_pde"] = True
+
     solver = MultiCellSplittingSolver(
         model=brain,
         parameter_map=odemap,
@@ -182,8 +217,8 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 def get_saver(
     brain: Model,
     outpath: Path,
-    point_path: tp.Optional[Path]
-) -> Saver:
+    point_path_list: tp.Optional[tp.Sequence[Path]]
+) -> tp.Tuple[Saver, tp.Sequence[str]]:
     sourcefiles = ["anisotropic_run.py"]
     jobscript_path = Path("jobscript_anisotropic.slurm")
     if jobscript_path.is_file():
@@ -195,26 +230,36 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh, brain.cell_domains)
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint", "hdf5"), stride_timestep=20, num_steps_in_part=None)
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20, num_steps_in_part=None)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=1, num_steps_in_part=None)
-    saver.add_field(BoundaryField("u_boundary", field_spec_checkpoint, brain.mesh))
+    if point_path_list is None:
+        point_path_list = []
 
-    # field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20*1000, num_steps_in_part=None)
-    # saver.add_field(Field("vs", field_spec_checkpoint))
+    v_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)
+    u_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)
+    point_name_list = []
+    for point_path in point_path_list:
+        # point_dir = point_path.parent
+        # Hmm
+        point_name = point_path.stem.split(".")[0].split("_")[-1]
 
-    if point_path is not None:
         points = np.loadtxt(str(point_path))
         points /= 10    # convert to cm
         check_bounds(points, limit=100)        # check for cm
-        v_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)  # v
-        saver.add_field(PointField("v_points", v_point_field_spec, points))
-        u_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)  # v
-        saver.add_field(PointField("u_points", u_point_field_spec, points))
 
-    return saver
+        # V points
+        _vp_name = f"{point_name}_points_v"
+        saver.add_field(PointField(_vp_name, v_point_field_spec, points))
+        point_name_list.append(_vp_name)
+
+        # U points
+        _up_name = f"{point_name}_points_u"
+        saver.add_field(PointField(_up_name, u_point_field_spec, points))
+        point_name_list.append(_up_name)
+
+    return saver, point_name_list
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -255,8 +300,10 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--point-path",
         help="Path to the points used for PointField sampling. Has to support np.loadtxt.",
+        nargs="+",
         type=Path,
         required=False,
+        default=None
     )
 
     return parser
@@ -303,11 +350,15 @@ if __name__ == "__main__":
                 "T": T,
                 "anisotropy": anisotropy
             },
-            directory_name="brain3d_anisotropic"
+            directory_name="brain3d_head"
         )
         store_arguments(args=args, out_path=identifier)
 
-        saver = get_saver(brain=brain, outpath=identifier, point_path=args.point_path)
+        saver, point_name_list = get_saver(
+            brain=brain,
+            outpath=identifier,
+            point_path_list=args.point_path
+        )
 
         tick = time.perf_counter()
         for i, ((t0, t1), (vs_, vs, vur)) in enumerate(solver.solve(0, T, dt)):
@@ -315,9 +366,6 @@ if __name__ == "__main__":
             if math.isnan(norm):
                 raise ValueError("Solution diverged")
             logger.info(f"{i} -- {brain.time(0):.5f} -- {norm:.6e}")
-
-            # df.assign(vur.sub(1), u_target_func)
-            # saver.update(brain.time, i, {"u_boundary": u_target_func})
 
             update_dict = dict()
             if saver.update_this_timestep(field_names=["u", "v"], timestep=i, time=brain.time(0)):
@@ -328,10 +376,13 @@ if __name__ == "__main__":
             #     update_dict.update({"vs": vs})
 
             # if saver.update_this_timestep(field_names=["v_points", "u_points"], timestep=i, time=brain.time(0)):
-            #     update_dict.update({"v_points": vs, "u_points": vs})
-
-            if saver.update_this_timestep(field_names=["u_boundary"], timestep=i, time=brain.time(0)):
-                update_dict.update({"u_boundary": u})
+            if saver.update_this_timestep(
+                    field_names=point_name_list,
+                    timestep=i,
+                    time=brain.time(0)
+            ):
+                # update_dict.update({"v_points": vs, "u_points": vs})
+                update_dict.update({_name: vs for _name in point_name_list})
 
             if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)
@@ -342,12 +393,6 @@ if __name__ == "__main__":
 
     parser = create_argument_parser()
     args = parser.parse_args()
+
     validate_arguments(args)
     run(args)
-        # Ks=4,
-        # Ku=8,
-        # mesh_name=args.mesh_name,
-        # dt=args.timestep,
-        # T=args.final_time,
-        # anisotropy=args.anisotropy
-    # )

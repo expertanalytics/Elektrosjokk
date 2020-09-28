@@ -43,6 +43,7 @@ from postspec import (
 from postfields import (
     Field,
     PointField,
+    BoundaryField,
 )
 
 import logging
@@ -101,8 +102,8 @@ def get_brain(*, mesh_name: str, conductivity: float) -> Model:
     indicator_function = get_indicator_function(mesh_directory / f"{mesh_name}_indicator.xdmf", mesh)
 
     # 1 -- GM, 2 -- WM
-    Mi_dict = {1: conductivity, 2: conductivity}      # 1 mS/cm for WM and GM
-    Me_dict = {1: 2.76, 2: 1.26}
+    Mi_dict = {1: conductivity, 2: conductivity, 3: 0}      # 1 mS/cm for WM and GM
+    Me_dict = {1: 2.76, 2: 1.26, 3: 17.9}
 
     brain = Model(
         domain=mesh,
@@ -166,6 +167,9 @@ def get_saver(
     field_spec_checkpoint = FieldSpec(save_as=("checkpoint", "hdf5"), stride_timestep=20, num_steps_in_part=None)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
+
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint", "hdf5"), stride_timestep=20, num_steps_in_part=None)
+    saver.add_field(BoundaryField("u_boundary", field_spec_checkpoint, brain.mesh))
 
     field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20*1000, num_steps_in_part=None)
     saver.add_field(Field("vs", field_spec_checkpoint))
@@ -275,6 +279,9 @@ if __name__ == "__main__":
 
             if saver.update_this_timestep(field_names=["v_points", "u_points"], timestep=i, time=brain.time(0)):
                 update_dict.update({"v_points": vs, "u_points": vs})
+
+            if saver.update_this_timestep(field_names=["u_boundary"], timestep=i, time=brain.time(0)):
+                update_dict.update({"u_boundary": u})
 
             if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)
