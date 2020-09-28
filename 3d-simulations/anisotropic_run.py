@@ -199,11 +199,8 @@ def get_saver(
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=1, num_steps_in_part=None)
-    saver.add_field(BoundaryField("u_boundary", field_spec_checkpoint, brain.mesh))
-
-    # field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20*1000, num_steps_in_part=None)
-    # saver.add_field(Field("vs", field_spec_checkpoint))
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20*1000, num_steps_in_part=None)
+    saver.add_field(Field("vs", field_spec_checkpoint))
 
     if point_path is not None:
         points = np.loadtxt(str(point_path))
@@ -271,7 +268,6 @@ def validate_arguments(args: tp.Any) -> None:
 if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
-    # def run(*, Ks: float, Ku: float, mesh_name: str, dt: float, T: float, anisotropy: str) -> None:
     def run(args) -> None:
         Ks = 4
         Ku = 8
@@ -316,22 +312,16 @@ if __name__ == "__main__":
                 raise ValueError("Solution diverged")
             logger.info(f"{i} -- {brain.time(0):.5f} -- {norm:.6e}")
 
-            # df.assign(vur.sub(1), u_target_func)
-            # saver.update(brain.time, i, {"u_boundary": u_target_func})
-
             update_dict = dict()
             if saver.update_this_timestep(field_names=["u", "v"], timestep=i, time=brain.time(0)):
                 v, u, *_ = vur.split(deepcopy=True)
                 update_dict.update({"v": v, "u": u})
 
-            # if saver.update_this_timestep(field_names=["vs"], timestep=i, time=brain.time(0)):
-            #     update_dict.update({"vs": vs})
+            if saver.update_this_timestep(field_names=["vs"], timestep=i, time=brain.time(0)):
+                update_dict.update({"vs": vs})
 
-            # if saver.update_this_timestep(field_names=["v_points", "u_points"], timestep=i, time=brain.time(0)):
-            #     update_dict.update({"v_points": vs, "u_points": vs})
-
-            if saver.update_this_timestep(field_names=["u_boundary"], timestep=i, time=brain.time(0)):
-                update_dict.update({"u_boundary": u})
+            if saver.update_this_timestep(field_names=["v_points", "u_points"], timestep=i, time=brain.time(0)):
+                update_dict.update({"v_points": vs, "u_points": vs})
 
             if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)
@@ -344,10 +334,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     validate_arguments(args)
     run(args)
-        # Ks=4,
-        # Ku=8,
-        # mesh_name=args.mesh_name,
-        # dt=args.timestep,
-        # T=args.final_time,
-        # anisotropy=args.anisotropy
-    # )
