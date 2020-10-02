@@ -151,8 +151,8 @@ def get_saver(
     *,
     brain: Model,
     outpath: Path,
-    point_path: tp.Optional[Path]
-) -> Saver:
+    point_path_list: tp.Optional[tp.Sequence[Path]]
+) -> tp.Tuple[Saver, tp.Sequence[str]]:
     sourcefiles = ["isotropic_run.py"]
 
     jobscript_path = Path("jobscript_isotropic.slurm")
@@ -164,27 +164,36 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh, brain.cell_domains)
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint", "hdf5"), stride_timestep=20, num_steps_in_part=None)
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20, num_steps_in_part=None)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint", "hdf5"), stride_timestep=20, num_steps_in_part=None)
-    saver.add_field(BoundaryField("u_boundary", field_spec_checkpoint, brain.mesh))
+    if point_path_list is None:
+        point_path_list = []
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20*1000, num_steps_in_part=None)
-    saver.add_field(Field("vs", field_spec_checkpoint))
+    v_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)
+    u_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)
+    point_name_list = []
+    for point_path in point_path_list:
+        # point_dir = point_path.parent
+        # Hmm
+        point_name = point_path.stem.split(".")[0].split("_")[-1]
 
-    if point_path is not None:
         points = np.loadtxt(str(point_path))
-        points /= 10
-        check_bounds(points, limit=100)
+        points /= 10    # convert to cm
+        check_bounds(points, limit=100)        # check for cm
 
-        v_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)  # v
-        saver.add_field(PointField("v_points", v_point_field_spec, points))
-        u_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)  # v
-        saver.add_field(PointField("u_points", v_point_field_spec, points))
+        # V points
+        _vp_name = f"{point_name}_points_v"
+        saver.add_field(PointField(_vp_name, v_point_field_spec, points))
+        point_name_list.append(_vp_name)
 
-    return saver
+        # U points
+        _up_name = f"{point_name}_points_u"
+        saver.add_field(PointField(_up_name, u_point_field_spec, points))
+        point_name_list.append(_up_name)
+
+    return saver, point_name_list
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -217,8 +226,10 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--point-path",
         help="Path to the points used for PointField sampling. Has to support np.loadtxt.",
+        nargs="+",
         type=Path,
         required=False,
+        default=None
     )
 
     return parser
@@ -259,7 +270,7 @@ if __name__ == "__main__":
         )
         store_arguments(args=args, out_path=identifier)
 
-        saver = get_saver(brain=brain, outpath=identifier, point_path=point_path)
+        saver, point_name_list = get_saver(brain=brain, outpath=identifier, point_path_list=point_path)
 
         tick = time.perf_counter()
 
@@ -274,14 +285,18 @@ if __name__ == "__main__":
                 v, u, *_ = vur.split(deepcopy=True)
                 update_dict.update({"v": v, "u": u})
 
-            if saver.update_this_timestep(field_names=["vs"], timestep=i, time=brain.time(0)):
-                update_dict.update({"vs": vs})
+            if saver.update_this_timestep(
+                    field_names=point_name_list,
+                    timestep=i,
+                    time=brain.time(0)
+            ):
+                update_dict.update({_name: vs for _name in point_name_list})
 
-            if saver.update_this_timestep(field_names=["v_points", "u_points"], timestep=i, time=brain.time(0)):
-                update_dict.update({"v_points": vs, "u_points": vs})
+            if len(update_dict) != 0:
+                saver.update(brain.time, i, update_dict)
 
-            if saver.update_this_timestep(field_names=["u_boundary"], timestep=i, time=brain.time(0)):
-                update_dict.update({"u_boundary": u})
+
+
 
             if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)
@@ -293,11 +308,3 @@ if __name__ == "__main__":
     parser = create_argument_parser()
     args = parser.parse_args()
     run(args)
-        # conductivity=1,
-        # Ks=4,
-        # Ku=8,
-        # mesh_name=args.mesh_name,
-        # dt=args.timestep,
-        # T=args.final_time,
-        # point_path=args.point_path
-    # )

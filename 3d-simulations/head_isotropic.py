@@ -98,26 +98,22 @@ def get_brain(mesh_name: str):
     # M_e_white = 1.26    # Dougherty
 
     # From "A guideline for head volume conductor modeling in EEG and MEG -- Vorwerk et. al 2014"
-    # CSF = 17.6
-    # skull = 0.1
-    # skin = 4.3
+    CSF = 17.6
+    skull = 0.1
+    skin = 4.3
 
-    CSF = 1.0
-    skull = 1.0
-    skin = 1.0
+    # CSF = 1.0
+    # skull = 1.0
+    # skin = 1.0
 
     MI_dict = {
         # 2: conductivity_tuple.intracellular,
         2: 1,
         1: M_i_gray,
-        3: 1,
-        4: 1,
-        5: 1,
-        6: 1
-        # 3: 1e-4,
-        # 4: 1e-4,
-        # 5: 1e-4,
-        # 6: 1e-4
+        3: 1e-4,
+        4: 1e-4,
+        5: 1e-4,
+        6: 1e-4
     }
 
     ME_dict = {
@@ -143,7 +139,7 @@ def get_brain(mesh_name: str):
         cell_models=Cressman(),      # Default parameters
         cell_domains=cell_function,
         indicator_function=indicator_function,
-        stimulus=stimulus_dict
+        # stimulus=stimulus_dict
     )
     return brain
 
