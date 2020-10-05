@@ -290,7 +290,7 @@ if __name__ == "__main__":
                     timestep=i,
                     time=brain.time(0)
             ):
-                update_dict.update({_name: vs for _name in point_name_list})
+                update_dict.update({_name: vur for _name in point_name_list})
 
             if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)

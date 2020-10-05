@@ -102,9 +102,9 @@ def get_brain(mesh_name: str):
     skull = 0.1
     skin = 4.3
 
-    # CSF = 1.0
-    # skull = 1.0
-    # skin = 1.0
+    CSF = 1e-4
+    skull = 1e-4
+    skin = 1e-4
 
     MI_dict = {
         # 2: conductivity_tuple.intracellular,
@@ -195,7 +195,7 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh, brain.cell_domains)
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20, num_steps_in_part=None)
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=100, num_steps_in_part=None)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
@@ -335,7 +335,7 @@ if __name__ == "__main__":
                     time=brain.time(0)
             ):
                 # update_dict.update({"v_points": vs, "u_points": vs})
-                update_dict.update({_name: vs for _name in point_name_list})
+                update_dict.update({_name: vur for _name in point_name_list})
 
             if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)
