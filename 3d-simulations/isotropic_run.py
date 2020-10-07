@@ -93,6 +93,8 @@ def get_brain(*, mesh_name: str, conductivity: float) -> Model:
         mesh_directory = Path.home() / "Documents/brain3d/meshes"
     elif "saga" in _hostname:
         mesh_directory = Path("/cluster/projects/nn9279k/jakobes/meshes")
+    elif "abacus" in _hostname:
+        mesh_directory = Path("/mn/kadingir/opsects_000000/meshes")
     else:
         mesh_directory = Path("meshes")
     logger.info(f"Using mesh directory {mesh_directory}")
@@ -164,7 +166,7 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh, brain.cell_domains)
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=20, num_steps_in_part=None)
+    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=100, num_steps_in_part=None)
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
@@ -295,11 +297,6 @@ if __name__ == "__main__":
             if len(update_dict) != 0:
                 saver.update(brain.time, i, update_dict)
 
-
-
-
-            if len(update_dict) != 0:
-                saver.update(brain.time, i, update_dict)
 
         saver.close()
         tock = time.perf_counter()

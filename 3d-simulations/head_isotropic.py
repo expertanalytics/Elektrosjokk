@@ -80,6 +80,8 @@ def get_brain(mesh_name: str):
         mesh_directory = Path.home() / "Documents/brain3d/meshes"
     elif "saga" in _hostname:
         mesh_directory = Path("/cluster/projects/nn9279k/jakobes/meshes")
+    elif "abacus" in _hostname:
+        mesh_directory = Path("/mn/kadingir/opsects_000000/meshes")
     else:
         mesh_directory = Path("meshes")
     logger.info(f"Using mesh directory {mesh_directory}")
@@ -102,9 +104,9 @@ def get_brain(mesh_name: str):
     skull = 0.1
     skin = 4.3
 
-    CSF = 1e-4
-    skull = 1e-4
-    skin = 1e-4
+    # CSF = 1e-4
+    # skull = 1e-4
+    # skin = 1e-4
 
     MI_dict = {
         # 2: conductivity_tuple.intracellular,
