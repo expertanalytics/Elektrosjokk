@@ -150,10 +150,10 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 
     odesolver_module = load_module("LatticeODESolver")
     odemap = odesolver_module.ODEMap()
-    odemap.add_ode(1, odesolver_module.Cressman(Ks))
-    # odemap.add_ode(2, odesolver_module.Cressman(Ku))
-    odemap.add_ode(11, odesolver_module.Cressman(Ks))
-    # odemap.add_ode(21, odesolver_module.Cressman(Ku))
+    odemap.add_ode(1, odesolver_module.Cressman(Ks))        # 1 --- Gray matter
+    # odemap.add_ode(2, odesolver_module.Cressman(Ku))      # 2 --- White matter
+    odemap.add_ode(11, odesolver_module.Cressman(Ku))       # 11 --- Unstable gray matter
+    # odemap.add_ode(21, odesolver_module.Cressman(Ku))     # 21 --- Unstable white matter
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
