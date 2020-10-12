@@ -305,8 +305,12 @@ if __name__ == "__main__":
             current_time = None
         current_time = df.MPI.comm_world.bcast(current_time, root=0)
 
+        _home = Path(".")
+        _hostname = socket.gethostname()
+        if "abacus" in _hostname:
+            _home = Path("/mn/kadingir/opsects_000000/data/simulations")
         identifier = simulation_directory(
-            home=Path("."),
+            home=_home,
             parameters={
                 "time": current_time,
                 "Ks": Ks,
