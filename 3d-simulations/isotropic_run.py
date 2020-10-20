@@ -138,9 +138,23 @@ def get_brain(*, mesh_name: str, conductivity: float) -> Model:
     mesh.coordinates()[:] /= 10
     indicator_function = get_indicator_function(mesh_directory / f"{mesh_name}_indicator.xdmf", mesh)
 
-    # 1 -- GM, 2 -- WM
-    Mi_dict = {1: conductivity, 2: conductivity, 3: 0}      # 1 mS/cm for WM and GM
-    Me_dict = {1: 2.76, 2: 1.26, 3: 17.9}
+    M_i_gray = 1.0      # Dougherty
+    M_e_gray = 2.78     # Dougherty
+
+    Mi_dict = {
+        2: 1,
+        1: M_i_gray,
+        3: 1e-4,
+        11: M_i_gray,
+        21: 1
+    }
+    Me_dict = {
+        2: 1.26,
+        1: M_e_gray,
+        3: 17.6,
+        11: M_e_gray,
+        21: 1.26
+    }
 
     brain = Model(
         domain=mesh,
@@ -151,6 +165,7 @@ def get_brain(*, mesh_name: str, conductivity: float) -> Model:
         cell_domains=cell_function,
         indicator_function=indicator_function
     )
+
     return brain
 
 
@@ -159,9 +174,7 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     odesolver_module = load_module("LatticeODESolver")
     odemap = odesolver_module.ODEMap()
     odemap.add_ode(1, odesolver_module.Cressman(Ks))        # 1 --- Gray matter
-    # odemap.add_ode(2, odesolver_module.Cressman(Ku))      # 2 --- White matter
     odemap.add_ode(11, odesolver_module.Cressman(Ku))       # 11 --- Unstable gray matter
-    # odemap.add_ode(21, odesolver_module.Cressman(Ku))     # 21 --- Unstable white matter
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     # cg, petsc_amg runs on saga
@@ -180,7 +193,51 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     )
 
     vs_prev, *_ = solver.solution_fields()
-    vs_prev.assign(brain.cell_models.initial_conditions())
+    # vs_prev.assign(brain.cell_models.initial_conditions())
+    # return solver
+
+    # initial conditions for `vs`
+    CSF_IC = tuple([0]*7)
+
+    STABLE_IC = (    # stable
+        -6.70340802e+01,
+        1.18435132e-02,
+        7.03013587e-02,
+        9.78136054e-01,
+        1.49366709e-07,
+        3.95901396e+00,
+        1.78009722e+01
+    )
+
+    UNSTABLE_IC = (
+        -6.06953303e+01,
+        2.63773216e-02,
+        1.09906468e-01,
+        9.49154804e-01,
+        7.69181883e-02,
+        1.08414264e+01,
+        1.89251358e+01
+    )
+
+    WHITE_IC = STABLE_IC
+
+    cell_model_dict = {
+        1: STABLE_IC,
+        2: WHITE_IC,
+        3: CSF_IC,
+        11: UNSTABLE_IC,
+        21: WHITE_IC
+    }
+
+    if 6 in brain.cell_domains.array():
+        cell_model_dict[6] = CSF_IC
+
+    odesolver_module.assign_vector(
+        vs_prev.vector(),
+        cell_model_dict,
+        brain.cell_domains,
+        vs_prev.function_space()._cpp_object
+    )
     return solver
 
 

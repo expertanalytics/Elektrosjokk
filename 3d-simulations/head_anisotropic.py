@@ -185,7 +185,9 @@ def get_brain(mesh_name: str, anisotropy_type: str):
         3: 1e-4,
         4: 1e-4,
         5: 1e-4,
-        6: 1e-4
+        6: 1e-4,
+        11: M_i_gray,
+        21: 1           # White
     }
 
     ME_dict = {
@@ -195,7 +197,9 @@ def get_brain(mesh_name: str, anisotropy_type: str):
         3: CSF,
         4: skin,
         5: skull,
-        6: CSF
+        6: CSF,
+        11: M_e_gray,
+        21: 1.26        # White
     }
 
     stimulus_dict = {
@@ -249,7 +253,54 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     )
 
     vs_prev, *_ = solver.solution_fields()
-    vs_prev.assign(brain.cell_models.initial_conditions())
+    # vs_prev.assign(brain.cell_models.initial_conditions())
+    # return solver
+
+    # initial conditions for `vs`
+    CSF_IC = tuple([0]*7)
+
+    STABLE_IC = (    # stable
+        -6.70340802e+01,
+        1.18435132e-02,
+        7.03013587e-02,
+        9.78136054e-01,
+        1.49366709e-07,
+        3.95901396e+00,
+        1.78009722e+01
+    )
+
+    UNSTABLE_IC = (
+        -6.06953303e+01,
+        2.63773216e-02,
+        1.09906468e-01,
+        9.49154804e-01,
+        7.69181883e-02,
+        1.08414264e+01,
+        1.89251358e+01
+    )
+
+    WHITE_IC = STABLE_IC
+
+    cell_model_dict = {
+        1: STABLE_IC,
+        2: WHITE_IC,
+        3: CSF_IC,
+        4: CSF_IC,
+        5: CSF_IC,
+        6: CSF_IC,
+        11: UNSTABLE_IC,
+        21: WHITE_IC
+    }
+
+    if 6 in brain.cell_domains.array():
+        cell_model_dict[6] = CSF_IC
+
+    odesolver_module.assign_vector(
+        vs_prev.vector(),
+        cell_model_dict,
+        brain.cell_domains,
+        vs_prev.function_space()._cpp_object
+    )
     return solver
 
 

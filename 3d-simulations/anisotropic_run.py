@@ -170,11 +170,26 @@ def get_brain(mesh_name: str, anisotropy_type: str):
     M_e_gray = 2.78     # Dougherty
     # M_e_white = 1.26    # Dougherty
 
+    Mi_dict = {
+        2: conductivity_tuple.intracellular,
+        1: M_i_gray,
+        3: 1e-4,
+        11: M_i_gray,
+        21: conductivity_tuple.intracellular
+    }
+    Me_dict = {
+        2: conductivity_tuple.extracellular,
+        1: M_e_gray,
+        3: 17.6,
+        11: M_e_gray,
+        21: conductivity_tuple.extracellular
+    }
+
     brain = Model(
         domain=mesh,
         time=time_constant,
-        M_i={2: conductivity_tuple.intracellular, 1: M_i_gray, 3: 0},
-        M_e={2: conductivity_tuple.extracellular, 1: M_e_gray, 3: 17.6},
+        M_i=Mi_dict,
+        M_e=Me_dict,
         cell_models=Cressman(),      # Default parameters
         cell_domains=cell_function,
         indicator_function=indicator_function
@@ -213,8 +228,49 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     )
 
     vs_prev, *_ = solver.solution_fields()
-    vs_prev.assign(brain.cell_models.initial_conditions())
+
+    CSF_IC = tuple([0]*7)
+
+    STABLE_IC = (    # stable
+        -6.70340802e+01,
+        1.18435132e-02,
+        7.03013587e-02,
+        9.78136054e-01,
+        1.49366709e-07,
+        3.95901396e+00,
+        1.78009722e+01
+    )
+
+    UNSTABLE_IC = (
+        -6.06953303e+01,
+        2.63773216e-02,
+        1.09906468e-01,
+        9.49154804e-01,
+        7.69181883e-02,
+        1.08414264e+01,
+        1.89251358e+01
+    )
+
+    WHITE_IC = STABLE_IC
+
+    cell_model_dict = {
+        1: STABLE_IC,
+        2: WHITE_IC,
+        3: CSF_IC,
+        11: UNSTABLE_IC,
+        21: WHITE_IC
+    }
+
+    odesolver_module.assign_vector(
+        vs_prev.vector(),
+        cell_model_dict,
+        brain.cell_domains,
+        vs_prev.function_space()._cpp_object
+    )
     return solver
+
+    # vs_prev.assign(brain.cell_models.initial_conditions())
+    # return solver
 
 
 def get_saver(
