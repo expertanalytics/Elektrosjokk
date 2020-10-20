@@ -68,6 +68,41 @@ df.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
 df.parameters["form_compiler"]["quadrature_degree"] = 3
 
 
+def grid(*, N: int, centre: tp.Sequence[float], dx: float) -> np.ndarray:
+    dim = len(centre)
+    foo = np.zeros([N]*(dim - 1) + [dim])
+
+    for i, pi in enumerate(centre):
+        foo[..., i] = np.linspace(pi - dx/2, pi + dx/2, N)
+
+    return foo.reshape(-1, dim)
+
+
+def filter_grid_points(
+    *,
+    indicator_function: df.Function,
+    centre: tp.Sequence[float],
+    N: int,
+    dx: float
+) -> tp.List[np.ndarray]:
+    _indicator = indicator_function
+    grid_points = [centre]
+
+    try:
+        _target_indicator = int(_indicator(centre))
+    except RuntimeError as e:
+        logger.info("point centre outside of domain")
+        return grid_points
+
+    for _p in grid(N=N, centre=centre, dx=dx):
+        try:
+            if _indicator(_p) == _target_indicator:
+                grid_points.append(_p)
+        except RuntimeError as e:
+            logger.info("point outisde of domain")
+    return grid_points
+
+
 def get_conductivities(mesh, directory: Path) -> tp.Tuple[df.Function, df.Function]:
     function_space = df.TensorFunctionSpace(mesh, "CG", 1)
     extracellular_function = df.Function(function_space)
@@ -176,24 +211,29 @@ def get_saver(
     v_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)
     u_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)
     point_name_list = []
-    for point_path in point_path_list:
-        # point_dir = point_path.parent
-        # Hmm
-        point_name = point_path.stem.split(".")[0].split("_")[-1]
 
+    for point_path in point_path_list:
         points = np.loadtxt(str(point_path))
         points /= 10    # convert to cm
         check_bounds(points, limit=100)        # check for cm
+        for point_index, centre in enumerate(points):
+            point_name = f"{point_path.stem.split('.')[0].split('_')[-1]}"
+            grid_points = filter_grid_points(
+                indicator_function=brain.indicator_function,
+                centre=centre,
+                N=5,
+                dx=4
+            )
 
-        # V points
-        _vp_name = f"{point_name}_points_v"
-        saver.add_field(PointField(_vp_name, v_point_field_spec, points))
-        point_name_list.append(_vp_name)
+            # V points
+            _vp_name = f"{point_name}_points_v{point_index}"
+            saver.add_field(PointField(_vp_name, v_point_field_spec, grid_points))
+            point_name_list.append(_vp_name)
 
-        # U points
-        _up_name = f"{point_name}_points_u"
-        saver.add_field(PointField(_up_name, u_point_field_spec, points))
-        point_name_list.append(_up_name)
+            # U points
+            _up_name = f"{point_name}_points_u{point_index}"
+            saver.add_field(PointField(_up_name, u_point_field_spec, grid_points))
+            point_name_list.append(_up_name)
 
     return saver, point_name_list
 

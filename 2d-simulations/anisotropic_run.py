@@ -17,6 +17,7 @@ from xalbrain import (
     Model,
     MultiCellSplittingSolver,
     MultiCellSolver,
+    SplittingSolver,
     BidomainSolver,
 )
 
@@ -96,7 +97,7 @@ def get_conductivities(
     return conductivity_tuple
 
 
-def get_brain(mesh_name: str, anisotropy_type: str):
+def get_brain(mesh_name: str, anisotropy_type: str, alpha: float):
     time_constant = df.Constant(0)
 
     # Realistic mesh
@@ -135,13 +136,19 @@ def get_brain(mesh_name: str, anisotropy_type: str):
     # Mi_dict = {2: conductivity_tuple.intracellular, 1: M_i_gray, 3: 0},
     # Me_dict = {2: conductivity_tuple.extracellular, 1: M_e_gray, 3: 17.6},
 
+    CSF = 17.6
+    GRAY_i = M_i_gray
+
+    # logistic_str = "GRAY + CSF*exp(alpha*(x[1] - y1))/(1 + exp(alpha*(x[1] - y1)))"
+    # M_i_gray = df.Expression(logistic_str, degree=1, GRAY=M_i_gray, CSF=1e-4, y1=8, alpha=alpha)
+    # M_e_gray = df.Expression(logistic_str, degree=1, GRAY=M_e_gray, CSF=CSF, y1=8, alpha=alpha)
+
     Mi_dict = {
         1: conductivity_tuple.intracellular,
         2: conductivity_tuple.intracellular,
         3: M_i_gray,
         4: M_i_gray,
         5: M_i_gray,
-        # 6: CSF,
     }
     Me_dict = {
         1: conductivity_tuple.extracellular,
@@ -149,13 +156,11 @@ def get_brain(mesh_name: str, anisotropy_type: str):
         3: M_e_gray,
         4: M_e_gray,
         5: M_e_gray,
-        # 6: 17.6
     }
 
-    CSF = 17.6
     if not "wo" in mesh_name:
         Me_dict[6] = CSF
-        Mi_dict[6] = CSF
+        Mi_dict[6] = 1e-4
 
     brain = Model(
         domain=mesh,
@@ -164,7 +169,7 @@ def get_brain(mesh_name: str, anisotropy_type: str):
         M_e=Me_dict,
         cell_models=Cressman(),      # Default parameters
         cell_domains=cell_function,
-        indicator_function=indicator_function
+        indicator_function=indicator_function,
     )
     return brain
 
@@ -176,8 +181,10 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     odemap.add_ode(40, odesolver_module.Cressman(Ku))        # 4 --- Gray matter -- unstable
     odemap.add_ode(50, odesolver_module.Cressman(Ks))        # 5 --- Gray matter -- stable
 
+    # splitting_parameters = SplittingSolver.default_parameters()
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
+    # splitting_parameters["BidomainSolver"]["linear_solver_type"] = "direct"
 
     # # gmres
     # ## petsc_amg, ilu,
@@ -191,6 +198,7 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     splitting_parameters["BidomainSolver"]["Chi"] = 1.26e3
     splitting_parameters["BidomainSolver"]["Cm"] = 1.0
 
+    # solver = SplittingSolver(model=brain, parameters=splitting_parameters)
     solver = MultiCellSplittingSolver(
         model=brain,
         parameter_map=odemap,
@@ -198,8 +206,53 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     )
 
     vs_prev, *_ = solver.solution_fields()
-    vs_prev.assign(brain.cell_models.initial_conditions())
+
+    # initial conditions for `vs`
+    CSF_IC = tuple([0]*7)
+
+    STABLE_IC = (    # stable
+        -6.70340802e+01,
+        1.18435132e-02,
+        7.03013587e-02,
+        9.78136054e-01,
+        1.49366709e-07,
+        3.95901396e+00,
+        1.78009722e+01
+    )
+
+    UNSTABLE_IC = (
+        -6.06953303e+01,
+        2.63773216e-02,
+        1.09906468e-01,
+        9.49154804e-01,
+        7.69181883e-02,
+        1.08414264e+01,
+        1.89251358e+01
+    )
+
+    WHITE_IC = STABLE_IC
+
+    cell_model_dict = {
+        1: WHITE_IC,
+        2: WHITE_IC,
+        3: STABLE_IC,
+        4: UNSTABLE_IC,
+        5: STABLE_IC
+    }
+
+    if 6 in brain.cell_domains.array():
+        cell_model_dict[6] = CSF_IC
+
+    odesolver_module.assign_vector(
+        vs_prev.vector(),
+        cell_model_dict,
+        brain.cell_domains,
+        vs_prev.function_space()._cpp_object
+    )
     return solver
+
+    # vs_prev.assign(brain.cell_models.initial_conditions())
+    # return solver
 
 
 def get_saver(
@@ -294,6 +347,14 @@ def create_argument_parser() -> argparse.ArgumentParser:
         default=None
     )
 
+    parser.add_argument(
+        "--alpha",
+        help="Steepness factor in the conductivity near the GM CSF interface.",
+        type=float,
+        required=False,
+        default=1
+    )
+
     return parser
 
 
@@ -317,7 +378,7 @@ if __name__ == "__main__":
         logger.info(f"mesh name: {args.mesh_name}")
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
-        brain = get_brain(mesh_name, anisotropy)
+        brain = get_brain(mesh_name, anisotropy, args.alpha)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 
         if df.MPI.rank(df.MPI.comm_world) == 0:
