@@ -102,6 +102,7 @@ def filter_grid_points(
                 grid_points.append(_p)
         except RuntimeError as e:
             logger.info("point outisde of domain")
+    print(len(grid_points))
     return grid_points
 
 
@@ -253,7 +254,7 @@ def get_saver(
                 indicator_function=brain.indicator_function,
                 centre=centre,
                 N=5,
-                dx=4
+                dx=.4
             )
 
             # V points

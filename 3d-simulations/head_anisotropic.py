@@ -290,7 +290,7 @@ def get_saver(
                 indicator_function=brain.indicator_function,
                 centre=centre,
                 N=5,
-                dx=4
+                dx=.4
             )
 
             # V points
