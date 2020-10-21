@@ -33,6 +33,7 @@ from postutils import (
     get_current_time_mpi,
     store_arguments,
     check_bounds,
+    solve_IC,
 )
 
 from postspec import (
@@ -197,8 +198,6 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     # return solver
 
     # initial conditions for `vs`
-    CSF_IC = tuple([0]*7)
-
     STABLE_IC = (    # stable
         -6.70340802e+01,
         1.18435132e-02,
@@ -220,6 +219,7 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     )
 
     WHITE_IC = STABLE_IC
+    CSF_IC = tuple([0]*len(UNSTABLE_IC))
 
     cell_model_dict = {
         1: STABLE_IC,
@@ -229,15 +229,12 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
         21: WHITE_IC
     }
 
-    if 6 in brain.cell_domains.array():
-        cell_model_dict[6] = CSF_IC
-
-    odesolver_module.assign_vector(
-        vs_prev.vector(),
-        cell_model_dict,
-        brain.cell_domains,
-        vs_prev.function_space()._cpp_object
+    vs_prev.assign(
+        solve_IC(brain.mesh, brain.cell_domains, cell_model_dict, dimension=len(UNSTABLE_IC))
     )
+
+    with df.XDMFFile("fof.xdmf") as foof:
+        foof.write(vs_prev)
     return solver
 
 
@@ -273,24 +270,25 @@ def get_saver(
         points = np.loadtxt(str(point_path))
         points /= 10    # convert to cm
         check_bounds(points, limit=100)        # check for cm
-        for point_index, centre in enumerate(points):
-            point_name = f"{point_path.stem.split('.')[0].split('_')[-1]}"
-            grid_points = filter_grid_points(
-                indicator_function=brain.indicator_function,
-                centre=centre,
-                N=5,
-                dx=.4
-            )
+        point_name = f"{point_path.stem.split('.')[0].split('_')[-1]}"
+        # for point_index, centre in enumerate(points):
+        #     grid_points = filter_grid_points(
+        #         indicator_function=brain.indicator_function,
+        #         centre=centre,
+        #         N=5,
+        #         dx=.4
+        #     )
 
-            # V points
-            _vp_name = f"{point_name}_points_v{point_index}"
-            saver.add_field(PointField(_vp_name, v_point_field_spec, grid_points))
-            point_name_list.append(_vp_name)
+        grid_points = points
+        # V points
+        _vp_name = f"{point_name}_points_v"
+        saver.add_field(PointField(_vp_name, v_point_field_spec, grid_points))
+        point_name_list.append(_vp_name)
 
-            # U points
-            _up_name = f"{point_name}_points_u{point_index}"
-            saver.add_field(PointField(_up_name, u_point_field_spec, grid_points))
-            point_name_list.append(_up_name)
+        # U points
+        _up_name = f"{point_name}_points_u"
+        saver.add_field(PointField(_up_name, u_point_field_spec, grid_points))
+        point_name_list.append(_up_name)
 
     return saver, point_name_list
 
