@@ -266,7 +266,7 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 def get_saver(
     brain: Model,
     outpath: Path,
-    point_path_list: tp.Optional[tp.Sequence[Path]]
+    point_dir: tp.Optional[Path]
 ) -> tp.Tuple[Saver, tp.Sequence[str]]:
     sourcefiles = ["isotropic_run.py"]
     jobscript_path = Path("jobscript_isotropic.slurm")
@@ -283,35 +283,38 @@ def get_saver(
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
-    if point_path_list is None:
-        point_path_list = []
-
     v_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=0)
     u_point_field_spec = FieldSpec(stride_timestep=4, sub_field_index=1)
     point_name_list = []
 
-    for point_path in point_path_list:
-        points = np.loadtxt(str(point_path))
+    _hostname = socket.gethostname()
+    logger.debug("Hostname: {_hostname}")
+    if point_dir is not None:
+        _point_directory = point_dir
+    elif "debian" in _hostname:
+        _point_directory = Path.home() / "Documents/brain3d/points/chosen_points"
+    elif "saga" in _hostname:
+        _point_directory = Path("/cluster/projects/nn9279k/jakobes/points/chosen_points")
+    elif "abacus" in _hostname:
+        _point_directory = Path("/mn/kadingir/opsects_000000/points/chosen_points")
+    else:
+        _point_directory = Path("points/chosen_points")
+    logger.info(f"Using point directory {_point_directory}")
+
+    for point_file in _point_directory.iterdir():
+        point_name = point_file.stem
+        points = np.loadtxt(str(point_file))
         points /= 10    # convert to cm
         check_bounds(points, limit=100)        # check for cm
-        point_name = f"{point_path.stem.split('.')[0].split('_')[-1]}"
-        # for point_index, centre in enumerate(points):
-        #     grid_points = filter_grid_points(
-        #         indicator_function=brain.indicator_function,
-        #         centre=centre,
-        #         N=5,
-        #         dx=.4
-        #     )
 
-        grid_points = points
         # V points
         _vp_name = f"{point_name}_points_v"
-        saver.add_field(PointField(_vp_name, v_point_field_spec, grid_points))
+        saver.add_field(PointField(_vp_name, v_point_field_spec, points))
         point_name_list.append(_vp_name)
 
         # U points
         _up_name = f"{point_name}_points_u"
-        saver.add_field(PointField(_up_name, u_point_field_spec, grid_points))
+        saver.add_field(PointField(_up_name, u_point_field_spec, points))
         point_name_list.append(_up_name)
 
     return saver, point_name_list
@@ -347,7 +350,6 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--point-path",
         help="Path to the points used for PointField sampling. Has to support np.loadtxt.",
-        nargs="+",
         type=Path,
         required=False,
         default=None
@@ -404,7 +406,7 @@ if __name__ == "__main__":
         saver, point_name_list = get_saver(
             brain=brain,
             outpath=identifier,
-            point_path_list=args.point_path
+            point_dir=args.point_path
         )
 
         tick = time.perf_counter()

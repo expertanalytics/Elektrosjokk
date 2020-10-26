@@ -402,7 +402,7 @@ if __name__ == "__main__":
                 "T": T,
                 "anisotropy": anisotropy
             },
-            directory_name="brain3d_anisotropic"
+            directory_name="brain2d_anisotropic"
         )
         store_arguments(args=args, out_path=identifier)
 
