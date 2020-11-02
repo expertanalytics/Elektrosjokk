@@ -135,7 +135,7 @@ def get_brain(*, mesh_name: str, conductivity: float) -> Model:
         mesh_directory = Path("meshes")
     logger.info(f"Using mesh directory {mesh_directory}")
 
-    mesh, cell_function = get_mesh(mesh_directory, mesh_name)
+    mesh, cell_function, _ = get_mesh(mesh_directory, mesh_name)
     mesh.coordinates()[:] /= 10
     indicator_function = get_indicator_function(mesh_directory / f"{mesh_name}_indicator.xdmf", mesh)
 
@@ -407,6 +407,7 @@ if __name__ == "__main__":
         saver.close()
         tock = time.perf_counter()
         logger.info("Execution time: {:.2f} s".format(tock - tick))
+        logger.info(f"Identifier: {identifier}")
 
     parser = create_argument_parser()
     args = parser.parse_args()

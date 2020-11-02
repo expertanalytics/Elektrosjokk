@@ -275,7 +275,7 @@ def get_saver(
     outpath: Path,
     point_dir: tp.Optional[Path]
 ) -> tp.Tuple[Saver, tp.Sequence[str]]:
-    sourcefiles = ["isotropic_run.py"]
+    sourcefiles = ["head_isotropic.py"]
     jobscript_path = Path("jobscript_isotropic.slurm")
     if jobscript_path.is_file():
         sourcefiles += [str(jobscript_path)]        # not usre str() is necessary
@@ -453,6 +453,7 @@ if __name__ == "__main__":
         saver.close()
         tock = time.perf_counter()
         logger.info("Execution time: {:.2f} s".format(tock - tick))
+        logger.info(f"Identifier: {identifier}")
 
     parser = create_argument_parser()
     args = parser.parse_args()
