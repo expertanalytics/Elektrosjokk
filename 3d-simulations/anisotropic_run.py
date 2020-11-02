@@ -135,21 +135,24 @@ def get_conductivities(
     return conductivity_tuple
 
 
-def get_brain(mesh_name: str, anisotropy_type: str):
+def get_brain(mesh_name: str, anisotropy_type: str, mesh_dir: tp.Optional[Path]):
     time_constant = df.Constant(0)
 
-    # Realistic mesh
-    _hostname = socket.gethostname()
-    logger.debug("Hostname: {_hostname}")
-    if "debian" in _hostname:
-        mesh_directory = Path.home() / "Documents/brain3d/meshes"
-    elif "saga" in _hostname:
-        mesh_directory = Path("/cluster/projects/nn9279k/jakobes/meshes")
-    elif "abacus" in _hostname:
-        mesh_directory = Path("/mn/kadingir/opsects_000000/meshes")
+    if mesh_dir is not None:
+        mesh_directory = mesh_dir
     else:
-        mesh_directory = Path("meshes")
-    logger.info(f"Using mesh directory {mesh_directory}")
+        # Realistic mesh
+        _hostname = socket.gethostname()
+        logger.debug("Hostname: {_hostname}")
+        if "debian" in _hostname:
+            mesh_directory = Path.home() / "Documents/brain3d/meshes"
+        elif "saga" in _hostname:
+            mesh_directory = Path("/cluster/projects/nn9279k/jakobes/meshes")
+        elif "abacus" in _hostname:
+            mesh_directory = Path("/mn/kadingir/opsects_000000/meshes")
+        else:
+            mesh_directory = Path("meshes")
+        logger.info(f"Using mesh directory {mesh_directory}")
 
     mesh, cell_function, _ = get_mesh(mesh_directory, mesh_name)
     mesh.coordinates()[:] /= 10
@@ -381,6 +384,13 @@ def create_argument_parser() -> argparse.ArgumentParser:
         default=None
     )
 
+    parser.add_argument(
+        "--mesh-dir",
+        type=Path,
+        required=False,
+        default=None
+    )
+
     return parser
 
 
@@ -404,7 +414,7 @@ if __name__ == "__main__":
         logger.info(f"mesh name: {args.mesh_name}")
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
-        brain = get_brain(mesh_name, anisotropy)
+        brain = get_brain(mesh_name, anisotropy, args.mesh_dir)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 
         if df.MPI.rank(df.MPI.comm_world) == 0:

@@ -119,21 +119,25 @@ def get_conductivities(mesh, directory: Path) -> tp.Tuple[df.Function, df.Functi
     return intracellular_function, extracellular_function
 
 
-def get_brain(*, mesh_name: str, conductivity: float) -> Model:
+def get_brain(*, mesh_name: str, conductivity: float, mesh_dir: tp.Optional[Path]) -> Model:
     time_constant = df.Constant(0)
 
     # Realistic mesh
-    _hostname = socket.gethostname()
-    logger.debug("Hostname: {_hostname}")
-    if "debian" in _hostname:
-        mesh_directory = Path.home() / "Documents/brain3d/meshes"
-    elif "saga" in _hostname:
-        mesh_directory = Path("/cluster/projects/nn9279k/jakobes/meshes")
-    elif "abacus" in _hostname:
-        mesh_directory = Path("/mn/kadingir/opsects_000000/meshes")
+
+    if mesh_dir is not None:
+        mesh_directory = mesh_dir
     else:
-        mesh_directory = Path("meshes")
-    logger.info(f"Using mesh directory {mesh_directory}")
+        _hostname = socket.gethostname()
+        logger.debug("Hostname: {_hostname}")
+        if "debian" in _hostname:
+            mesh_directory = Path.home() / "Documents/brain3d/meshes"
+        elif "saga" in _hostname:
+            mesh_directory = Path("/cluster/projects/nn9279k/jakobes/meshes")
+        elif "abacus" in _hostname:
+            mesh_directory = Path("/mn/kadingir/opsects_000000/meshes")
+        else:
+            mesh_directory = Path("meshes")
+        logger.info(f"Using mesh directory {mesh_directory}")
 
     mesh, cell_function, _ = get_mesh(mesh_directory, mesh_name)
     mesh.coordinates()[:] /= 10
@@ -327,6 +331,13 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--point-path",
         help="Path to the points used for PointField sampling. Has to support np.loadtxt.",
         nargs="+",
+        type=Path,
+        required=False,
+        default=None
+    )
+
+    parser.add_argument(
+        "--mesh-dir",
         type=Path,
         required=False,
         default=None
