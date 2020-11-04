@@ -359,7 +359,7 @@ if __name__ == "__main__":
         T = args.final_time
         dt = args.timestep
 
-        brain = get_brain(mesh_name=mesh_name, conductivity=conductivity)
+        brain = get_brain(mesh_name=mesh_name, conductivity=conductivity, mesh_dir=args.mesh_dir)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 
         current_time = get_current_time_mpi()
