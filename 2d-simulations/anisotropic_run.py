@@ -113,7 +113,7 @@ def get_brain(mesh_name: str, anisotropy_type: str, alpha: float):
         mesh_directory = Path("2d-meshes")
     logger.info(f"Using mesh directory {mesh_directory}")
 
-    mesh, cell_function = get_mesh(mesh_directory, mesh_name)
+    mesh, cell_function, _ = get_mesh(mesh_directory, mesh_name)
     mesh.coordinates()[:] /= 10
     indicator_function = get_indicator_function(mesh_directory / f"{mesh_name}_indicator.xdmf", mesh)
 
@@ -207,52 +207,52 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 
     vs_prev, *_ = solver.solution_fields()
 
-    # initial conditions for `vs`
-    CSF_IC = tuple([0]*7)
+    # # initial conditions for `vs`
+    # CSF_IC = tuple([0]*7)
 
-    STABLE_IC = (    # stable
-        -6.70340802e+01,
-        1.18435132e-02,
-        7.03013587e-02,
-        9.78136054e-01,
-        1.49366709e-07,
-        3.95901396e+00,
-        1.78009722e+01
-    )
+    # STABLE_IC = (    # stable
+    #     -6.70340802e+01,
+    #     1.18435132e-02,
+    #     7.03013587e-02,
+    #     9.78136054e-01,
+    #     1.49366709e-07,
+    #     3.95901396e+00,
+    #     1.78009722e+01
+    # )
 
-    UNSTABLE_IC = (
-        -6.06953303e+01,
-        2.63773216e-02,
-        1.09906468e-01,
-        9.49154804e-01,
-        7.69181883e-02,
-        1.08414264e+01,
-        1.89251358e+01
-    )
+    # UNSTABLE_IC = (
+    #     -6.06953303e+01,
+    #     2.63773216e-02,
+    #     1.09906468e-01,
+    #     9.49154804e-01,
+    #     7.69181883e-02,
+    #     1.08414264e+01,
+    #     1.89251358e+01
+    # )
 
-    WHITE_IC = STABLE_IC
+    # WHITE_IC = STABLE_IC
 
-    cell_model_dict = {
-        1: WHITE_IC,
-        2: WHITE_IC,
-        3: STABLE_IC,
-        4: UNSTABLE_IC,
-        5: STABLE_IC
-    }
+    # cell_model_dict = {
+    #     1: WHITE_IC,
+    #     2: WHITE_IC,
+    #     3: STABLE_IC,
+    #     4: UNSTABLE_IC,
+    #     5: STABLE_IC
+    # }
 
-    if 6 in brain.cell_domains.array():
-        cell_model_dict[6] = CSF_IC
+    # if 6 in brain.cell_domains.array():
+    #     cell_model_dict[6] = CSF_IC
 
-    odesolver_module.assign_vector(
-        vs_prev.vector(),
-        cell_model_dict,
-        brain.cell_domains,
-        vs_prev.function_space()._cpp_object
-    )
-    return solver
-
-    # vs_prev.assign(brain.cell_models.initial_conditions())
+    # odesolver_module.assign_vector(
+    #     vs_prev.vector(),
+    #     cell_model_dict,
+    #     brain.cell_domains,
+    #     vs_prev.function_space()._cpp_object
+    # )
     # return solver
+
+    vs_prev.assign(brain.cell_models.initial_conditions())
+    return solver
 
 
 def get_saver(
@@ -433,6 +433,7 @@ if __name__ == "__main__":
         saver.close()
         tock = time.perf_counter()
         logger.info("Execution time: {:.2f} s".format(tock - tick))
+        logger.info(f"Identifier: {identifier}")
 
     parser = create_argument_parser()
     args = parser.parse_args()
