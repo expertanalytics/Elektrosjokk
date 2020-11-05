@@ -137,6 +137,8 @@ def get_brain(mesh_name: str, anisotropy_type: str, alpha: float):
     # Me_dict = {2: conductivity_tuple.extracellular, 1: M_e_gray, 3: 17.6},
 
     CSF = 17.6
+    SKULL = 0.1
+    SKIN = 4.3
     GRAY_i = M_i_gray
 
     # logistic_str = "GRAY + CSF*exp(alpha*(x[1] - y1))/(1 + exp(alpha*(x[1] - y1)))"
@@ -149,6 +151,9 @@ def get_brain(mesh_name: str, anisotropy_type: str, alpha: float):
         3: M_i_gray,
         4: M_i_gray,
         5: M_i_gray,
+        6: 1e-4,
+        7: 1e-4,
+        8: 1e-4,
     }
     Me_dict = {
         1: conductivity_tuple.extracellular,
@@ -156,6 +161,9 @@ def get_brain(mesh_name: str, anisotropy_type: str, alpha: float):
         3: M_e_gray,
         4: M_e_gray,
         5: M_e_gray,
+        6: CSF,
+        7: SKULL,
+        8: SKIN
     }
 
     if not "wo" in mesh_name:
