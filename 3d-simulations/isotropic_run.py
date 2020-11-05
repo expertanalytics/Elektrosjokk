@@ -330,7 +330,6 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--point-path",
         help="Path to the points used for PointField sampling. Has to support np.loadtxt.",
-        nargs="+",
         type=Path,
         required=False,
         default=None
