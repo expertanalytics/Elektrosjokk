@@ -151,9 +151,6 @@ def get_brain(mesh_name: str, anisotropy_type: str, alpha: float):
         3: M_i_gray,
         4: M_i_gray,
         5: M_i_gray,
-        6: 1e-4,
-        7: 1e-4,
-        8: 1e-4,
     }
     Me_dict = {
         1: conductivity_tuple.extracellular,
@@ -161,14 +158,16 @@ def get_brain(mesh_name: str, anisotropy_type: str, alpha: float):
         3: M_e_gray,
         4: M_e_gray,
         5: M_e_gray,
-        6: CSF,
-        7: SKULL,
-        8: SKIN
     }
 
     if not "wo" in mesh_name:
-        Me_dict[6] = CSF
         Mi_dict[6] = 1e-4
+        Mi_dict[7] = 1e-4
+        Mi_dict[8] = 1e-4
+
+        Me_dict[6] = CSF
+        Me_dict[7] = SKULL
+        Me_dict[8] = SKIN
 
     brain = Model(
         domain=mesh,
