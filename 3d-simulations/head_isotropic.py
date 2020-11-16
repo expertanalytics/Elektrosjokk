@@ -193,7 +193,7 @@ def get_brain(mesh_name: str, mesh_dir: tp.Optional[Path]):
     return brain
 
 
-def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolver:
+def get_solver(*, brain: Model, Ks: float, Ku: float, ic_type: str) -> MultiCellSplittingSolver:
     odesolver_module = load_module("LatticeODESolver")
     # Indices are in reference to indicator_function, not cell_function
     odemap = odesolver_module.ODEMap()
@@ -224,50 +224,52 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     )
 
     vs_prev, *_ = solver.solution_fields()
-    # vs_prev.assign(brain.cell_models.initial_conditions())
-    # return solver
+    if ic_type == "cressman":
+        vs_prev.assign(brain.cell_models.initial_conditions())
+        return solver
+    elif ic_type == "stable_unstable":
+        # initial conditions for `vs`
+        CSF_IC = tuple([0]*7)
 
-    # initial conditions for `vs`
-    CSF_IC = tuple([0]*7)
+        STABLE_IC = (    # stable
+            -6.70340802e+01,
+            1.18435132e-02,
+            7.03013587e-02,
+            9.78136054e-01,
+            1.49366709e-07,
+            3.95901396e+00,
+            1.78009722e+01
+        )
 
-    STABLE_IC = (    # stable
-        -6.70340802e+01,
-        1.18435132e-02,
-        7.03013587e-02,
-        9.78136054e-01,
-        1.49366709e-07,
-        3.95901396e+00,
-        1.78009722e+01
-    )
+        UNSTABLE_IC = (
+            -6.06953303e+01,
+            2.63773216e-02,
+            1.09906468e-01,
+            9.49154804e-01,
+            7.69181883e-02,
+            1.08414264e+01,
+            1.89251358e+01
+        )
 
-    UNSTABLE_IC = (
-        -6.06953303e+01,
-        2.63773216e-02,
-        1.09906468e-01,
-        9.49154804e-01,
-        7.69181883e-02,
-        1.08414264e+01,
-        1.89251358e+01
-    )
+        WHITE_IC = STABLE_IC
 
-    WHITE_IC = STABLE_IC
+        cell_model_dict = {
+            1: STABLE_IC,
+            2: WHITE_IC,
+            3: WHITE_IC,
+            4: WHITE_IC,
+            5: WHITE_IC,
+            6: WHITE_IC,
+            11: UNSTABLE_IC,
+            21: WHITE_IC
+        }
 
-    cell_model_dict = {
-        1: STABLE_IC,
-        2: WHITE_IC,
-        3: WHITE_IC,
-        4: WHITE_IC,
-        5: WHITE_IC,
-        6: WHITE_IC,
-        11: UNSTABLE_IC,
-        21: WHITE_IC
-    }
-
-    vs_prev.assign(
-        solve_IC(brain.mesh, brain.cell_domains, cell_model_dict, dimension=len(UNSTABLE_IC))
-    )
-
-    return solver
+        vs_prev.assign(
+            solve_IC(brain.mesh, brain.cell_domains, cell_model_dict, dimension=len(UNSTABLE_IC))
+        )
+        return solver
+    else:
+        raise RuntimeError("Unknon ic type")
 
 
 def get_saver(
@@ -369,11 +371,26 @@ def create_argument_parser() -> argparse.ArgumentParser:
         default=None
     )
 
+    parser.add_argument(
+        "--cressman",
+        action="store_true",
+        help="Use standrd cressman initial conditions everywhere."
+    )
+
+    parser.add_argument(
+        "--stable-unstable",
+        action="store_true",
+        help="Use stble and unstable initial conditions."
+    )
+
     return parser
 
 
 def validate_arguments(args: tp.Any) -> None:
-    pass
+    if args.cressman and args.stable_unstable:
+        raise RuntimeError("'cressman' and 'stable-unstable' cannot be set at the same time")
+    elif not args.cressman and not args.stable_unstable:
+        raise RuntimeError("Either 'cressman' or 'stable-unstable' must be set")
 
 
 if __name__ == "__main__":
@@ -391,7 +408,12 @@ if __name__ == "__main__":
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
         brain = get_brain(mesh_name, args.mesh_dir)
-        solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
+
+        if args.cressman:
+            ic_type = "cressman"
+        elif args.stabel_unstable:
+            ic_type = "stable_unstable"
+        solver = get_solver(brain=brain, Ks=Ks, Ku=Ku, ic_type=ic_type)
 
         if df.MPI.rank(df.MPI.comm_world) == 0:
             current_time = datetime.datetime.now()
