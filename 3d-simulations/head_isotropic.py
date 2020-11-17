@@ -71,42 +71,11 @@ df.parameters["form_compiler"]["quadrature_degree"] = 3
 CONDUCTIVITY_TUPLE = namedtuple("CONDUCTIVITY_TUPLE", ["intracellular", "extracellular"])
 
 
-def grid(*, N: int, centre: tp.Sequence[float], dx: float) -> np.ndarray:
-    dim = len(centre)
-    foo = np.zeros([N]*(dim - 1) + [dim])
-
-    for i, pi in enumerate(centre):
-        foo[..., i] = np.linspace(pi - dx/2, pi + dx/2, N)
-
-    return foo.reshape(-1, dim)
-
-
-def filter_grid_points(
-    *,
-    indicator_function: df.Function,
-    centre: tp.Sequence[float],
-    N: int,
-    dx: float
-) -> tp.List[np.ndarray]:
-    _indicator = indicator_function
-    grid_points = [centre]
-
-    try:
-        _target_indicator = int(_indicator(centre))
-    except RuntimeError as e:
-        logger.info("point centre outside of domain")
-        return grid_points
-
-    for _p in grid(N=N, centre=centre, dx=dx):
-        try:
-            if _indicator(_p) == _target_indicator:
-                grid_points.append(_p)
-        except RuntimeError as e:
-            logger.info("point outisde of domain")
-    return grid_points
-
-
-def get_brain(mesh_name: str, mesh_dir: tp.Optional[Path]):
+def get_brain(
+    mesh_name: str,
+    mesh_dir: tp.Optional[Path],
+    unstable_tags: tp.Optional[tp.Sequence[int]]
+):
     time_constant = df.Constant(0)
 
     # Realistic mesh
@@ -175,10 +144,14 @@ def get_brain(mesh_name: str, mesh_dir: tp.Optional[Path]):
         21: 1.26        # White
     }
 
+    if unstable_tags is not None:
+        for tag in unstable_tags:
+            ME_dict[tag] = M_e_gray
+            MI_dict[tag] = M_i_gray
+
     stimulus_dict = {
         1: df.Constant(1)
     }
-
 
     brain = Model(
         domain=mesh,
@@ -193,12 +166,20 @@ def get_brain(mesh_name: str, mesh_dir: tp.Optional[Path]):
     return brain
 
 
-def get_solver(*, brain: Model, Ks: float, Ku: float, ic_type: str) -> MultiCellSplittingSolver:
+def get_solver(
+    *,
+    brain: Model,
+    Ks: float,
+    Ku: float,
+    ic_type: str,
+    unstable_tags: tp.Sequence[int]
+) -> MultiCellSplittingSolver:
     odesolver_module = load_module("LatticeODESolver")
     # Indices are in reference to indicator_function, not cell_function
     odemap = odesolver_module.ODEMap()
     odemap.add_ode(1, odesolver_module.Cressman(Ks))        # 1 --- Gray matter
-    odemap.add_ode(11, odesolver_module.Cressman(Ku))       # 11 --- Unstable gray matter
+    for key in unstable_tags:
+        odemap.add_ode(key, odesolver_module.Cressman(Ku))       # 11 --- Unstable gray matter
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
@@ -260,9 +241,12 @@ def get_solver(*, brain: Model, Ks: float, Ku: float, ic_type: str) -> MultiCell
             4: WHITE_IC,
             5: WHITE_IC,
             6: WHITE_IC,
-            11: UNSTABLE_IC,
+            11: STABLE_IC,
             21: WHITE_IC
         }
+
+        for key in unstable_tags:
+            cell_model_dict[key] = UNSTABLE_IC
 
         vs_prev.assign(
             solve_IC(brain.mesh, brain.cell_domains, cell_model_dict, dimension=len(UNSTABLE_IC))
@@ -383,6 +367,14 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Use stble and unstable initial conditions."
     )
 
+    parser.add_argument(
+        "--unstable-tags",
+        nargs="+",
+        type=int,
+        help="Cell tags of the unstable domain.",
+        required=True
+    )
+
     return parser
 
 
@@ -407,13 +399,19 @@ if __name__ == "__main__":
         logger.info(f"mesh name: {args.mesh_name}")
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
-        brain = get_brain(mesh_name, args.mesh_dir)
+        brain = get_brain(mesh_name, args.mesh_dir, args.unstable_tags)
 
         if args.cressman:
             ic_type = "cressman"
-        elif args.stabel_unstable:
+        elif args.stable_unstable:
             ic_type = "stable_unstable"
-        solver = get_solver(brain=brain, Ks=Ks, Ku=Ku, ic_type=ic_type)
+        solver = get_solver(
+            brain=brain,
+            Ks=Ks,
+            Ku=Ku,
+            ic_type=ic_type,
+            unstable_tags=args.unstable_tags
+        )
 
         if df.MPI.rank(df.MPI.comm_world) == 0:
             current_time = datetime.datetime.now()
