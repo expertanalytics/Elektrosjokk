@@ -430,6 +430,7 @@ if __name__ == "__main__":
                 "Ks": Ks,
                 "Ku": Ku,
                 "mesh-name": mesh_name,
+                "mesh-dir": args.mesh_dir,
                 "dt": dt,
                 "T": T,
             },
