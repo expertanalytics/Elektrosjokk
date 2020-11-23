@@ -74,7 +74,7 @@ CONDUCTIVITY_TUPLE = namedtuple("CONDUCTIVITY_TUPLE", ["intracellular", "extrace
 def get_brain(
     mesh_name: str,
     mesh_dir: tp.Optional[Path],
-    unstable_tags: tp.Optional[tp.Sequence[int]]
+    unstable_tags: tp.Sequence[int]
 ):
     time_constant = df.Constant(0)
 
@@ -144,10 +144,9 @@ def get_brain(
         21: 1.26        # White
     }
 
-    if unstable_tags is not None:
-        for tag in unstable_tags:
-            ME_dict[tag] = M_e_gray
-            MI_dict[tag] = M_i_gray
+    for tag in unstable_tags:
+        ME_dict[tag] = M_e_gray
+        MI_dict[tag] = M_i_gray
 
     stimulus_dict = {
         1: df.Constant(1)
@@ -257,6 +256,7 @@ def get_solver(
 
 
 def get_saver(
+    *,
     brain: Model,
     outpath: Path,
     point_dir: tp.Optional[Path]
@@ -265,14 +265,17 @@ def get_saver(
     jobscript_path = Path("jobscript_isotropic.slurm")
     if jobscript_path.is_file():
         sourcefiles += [str(jobscript_path)]        # not usre str() is necessary
-
     store_sourcefiles(map(Path, sourcefiles), outpath)
 
     saver_parameters = SaverSpec(casedir=outpath, overwrite_casedir=True)
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh, brain.cell_domains)
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=400, num_steps_in_part=None)
+    field_spec_checkpoint = FieldSpec(
+        save_as=("checkpoint",),
+        stride_timestep=400,
+        num_steps_in_part=None
+    )
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
@@ -456,16 +459,11 @@ if __name__ == "__main__":
                 v, u, *_ = vur.split(deepcopy=True)
                 update_dict.update({"v": v, "u": u})
 
-            # if saver.update_this_timestep(field_names=["vs"], timestep=i, time=brain.time(0)):
-            #     update_dict.update({"vs": vs})
-
-            # if saver.update_this_timestep(field_names=["v_points", "u_points"], timestep=i, time=brain.time(0)):
             if saver.update_this_timestep(
                     field_names=point_name_list,
                     timestep=i,
                     time=brain.time(0)
             ):
-                # update_dict.update({"v_points": vs, "u_points": vs})
                 update_dict.update({_name: vur for _name in point_name_list})
 
             if len(update_dict) != 0:
@@ -478,6 +476,5 @@ if __name__ == "__main__":
 
     parser = create_argument_parser()
     args = parser.parse_args()
-
     validate_arguments(args)
     run(args)

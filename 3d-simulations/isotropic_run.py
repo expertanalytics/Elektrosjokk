@@ -69,57 +69,12 @@ df.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
 df.parameters["form_compiler"]["quadrature_degree"] = 3
 
 
-def grid(*, N: int, centre: tp.Sequence[float], dx: float) -> np.ndarray:
-    dim = len(centre)
-    foo = np.zeros([N]*(dim - 1) + [dim])
-
-    for i, pi in enumerate(centre):
-        foo[..., i] = np.linspace(pi - dx/2, pi + dx/2, N)
-
-    return foo.reshape(-1, dim)
-
-
-def filter_grid_points(
+def get_brain(
     *,
-    indicator_function: df.Function,
-    centre: tp.Sequence[float],
-    N: int,
-    dx: float
-) -> tp.List[np.ndarray]:
-    _indicator = indicator_function
-    grid_points = [centre]
-
-    try:
-        _target_indicator = int(_indicator(centre))
-    except RuntimeError as e:
-        logger.info("point centre outside of domain")
-        return grid_points
-
-    for _p in grid(N=N, centre=centre, dx=dx):
-        try:
-            if _indicator(_p) == _target_indicator:
-                grid_points.append(_p)
-        except RuntimeError as e:
-            logger.info("point outisde of domain")
-    return grid_points
-
-
-def get_conductivities(mesh, directory: Path) -> tp.Tuple[df.Function, df.Function]:
-    function_space = df.TensorFunctionSpace(mesh, "CG", 1)
-    extracellular_function = df.Function(function_space)
-    intracellular_function = df.Function(function_space)
-
-    name = "indicator"  #TODO: change to conductivity
-    with df.XDMFFile(str(directory / "extracellular_conductivity.xdmf")) as ifh:
-        ifh.read_checkpoint(extracellular_function, name, counter=0)
-
-    with df.XDMFFile(str(directory / "intracellular_conductivity.xdmf")) as ifh:
-        ifh.read_checkpoint(intracellular_function, name, counter=0)
-
-    return intracellular_function, extracellular_function
-
-
-def get_brain(*, mesh_name: str, conductivity: float, mesh_dir: tp.Optional[Path]) -> Model:
+    mesh_name: str,
+    mesh_dir: tp.Optional[Path],
+    unstable_tags: tp.Sequence[int]
+) -> Model:
     time_constant = df.Constant(0)
 
     # Realistic mesh
@@ -146,14 +101,14 @@ def get_brain(*, mesh_name: str, conductivity: float, mesh_dir: tp.Optional[Path
     M_i_gray = 1.0      # Dougherty
     M_e_gray = 2.78     # Dougherty
 
-    Mi_dict = {
+    MI_dict = {
         2: 1,
         1: M_i_gray,
         3: 1e-4,
         11: M_i_gray,
         21: 1
     }
-    Me_dict = {
+    ME_dict = {
         2: 1.26,
         1: M_e_gray,
         3: 17.6,
@@ -161,11 +116,15 @@ def get_brain(*, mesh_name: str, conductivity: float, mesh_dir: tp.Optional[Path
         21: 1.26
     }
 
+    for tag in unstable_tags:
+        ME_dict[tag] = M_e_gray
+        MI_dict[tag] = M_i_gray
+
     brain = Model(
         domain=mesh,
         time=time_constant,
-        M_i=Mi_dict,
-        M_e=Me_dict,
+        M_i=MI_dict,
+        M_e=ME_dict,
         cell_models=Cressman(),      # Default parameters
         cell_domains=cell_function,
         indicator_function=indicator_function
@@ -174,12 +133,19 @@ def get_brain(*, mesh_name: str, conductivity: float, mesh_dir: tp.Optional[Path
     return brain
 
 
-def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolver:
-
+def get_solver(
+    *,
+    brain: Model,
+    Ks: float,
+    Ku: float,
+    ic_type: str,
+    unstable_tags: tp.Sequence[int]
+) -> MultiCellSplittingSolver:
     odesolver_module = load_module("LatticeODESolver")
     odemap = odesolver_module.ODEMap()
     odemap.add_ode(1, odesolver_module.Cressman(Ks))        # 1 --- Gray matter
-    odemap.add_ode(11, odesolver_module.Cressman(Ku))       # 11 --- Unstable gray matter
+    for key in unstable_tags:
+        odemap.add_ode(key, odesolver_module.Cressman(Ku))
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     # cg, petsc_amg runs on saga
@@ -198,48 +164,55 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     )
 
     vs_prev, *_ = solver.solution_fields()
-    # vs_prev.assign(brain.cell_models.initial_conditions())
-    # return solver
+    if ic_type == "cressman":
+        vs_prev.assign(brain.cell_models.initial_conditions())
+        return solver
+    elif ic_type == "stable_unstable":
+        # initial conditions for `vs`
+        CSF_IC = tuple([0]*7)
 
-    # initial conditions for `vs`
-    STABLE_IC = (    # stable
-        -6.70340802e+01,
-        1.18435132e-02,
-        7.03013587e-02,
-        9.78136054e-01,
-        1.49366709e-07,
-        3.95901396e+00,
-        1.78009722e+01
-    )
+        STABLE_IC = (    # stable
+            -6.70340802e+01,
+            1.18435132e-02,
+            7.03013587e-02,
+            9.78136054e-01,
+            1.49366709e-07,
+            3.95901396e+00,
+            1.78009722e+01
+        )
 
-    UNSTABLE_IC = (
-        -6.06953303e+01,
-        2.63773216e-02,
-        1.09906468e-01,
-        9.49154804e-01,
-        7.69181883e-02,
-        1.08414264e+01,
-        1.89251358e+01
-    )
+        UNSTABLE_IC = (
+            -6.06953303e+01,
+            2.63773216e-02,
+            1.09906468e-01,
+            9.49154804e-01,
+            7.69181883e-02,
+            1.08414264e+01,
+            1.89251358e+01
+        )
 
-    WHITE_IC = STABLE_IC
-    CSF_IC = tuple([0]*len(UNSTABLE_IC))
+        WHITE_IC = STABLE_IC
 
-    cell_model_dict = {
-        1: STABLE_IC,
-        2: WHITE_IC,
-        3: CSF_IC,
-        11: UNSTABLE_IC,
-        21: WHITE_IC
-    }
+        cell_model_dict = {
+            1: STABLE_IC,
+            2: WHITE_IC,
+            3: WHITE_IC,
+            # 4: WHITE_IC,
+            # 5: WHITE_IC,
+            # 6: WHITE_IC,
+            11: STABLE_IC,
+            21: WHITE_IC
+        }
 
-    vs_prev.assign(
-        solve_IC(brain.mesh, brain.cell_domains, cell_model_dict, dimension=len(UNSTABLE_IC))
-    )
+        for key in unstable_tags:
+            cell_model_dict[key] = UNSTABLE_IC
 
-    with df.XDMFFile("fof.xdmf") as foof:
-        foof.write(vs_prev)
-    return solver
+        vs_prev.assign(
+            solve_IC(brain.mesh, brain.cell_domains, cell_model_dict, dimension=len(UNSTABLE_IC))
+        )
+        return solver
+    else:
+        raise RuntimeError("Unknon ic type")
 
 
 def get_saver(
@@ -249,7 +222,6 @@ def get_saver(
     point_dir: tp.Optional[Path]
 ) -> tp.Tuple[Saver, tp.Sequence[str]]:
     sourcefiles = ["isotropic_run.py"]
-
     jobscript_path = Path("jobscript_isotropic.slurm")
     if jobscript_path.is_file():
         sourcefiles += [str(jobscript_path)]        # not usre str() is necessary
@@ -259,7 +231,11 @@ def get_saver(
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh, brain.cell_domains)
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=400, num_steps_in_part=None)
+    field_spec_checkpoint = FieldSpec(
+        save_as=("checkpoint",),
+        stride_timestep=400,
+        num_steps_in_part=None
+    )
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
@@ -342,7 +318,33 @@ def create_argument_parser() -> argparse.ArgumentParser:
         default=None
     )
 
+    parser.add_argument(
+        "--cressman",
+        action="store_true",
+        help="Use standrd cressman initial conditions everywhere."
+    )
+
+    parser.add_argument(
+        "--stable-unstable",
+        action="store_true",
+        help="Use stble and unstable initial conditions."
+    )
+
+    parser.add_argument(
+        "--unstable-tags",
+        nargs="+",
+        type=int,
+        help="Cell tags of the unstable domain.",
+        required=True
+    )
     return parser
+
+
+def validate_arguments(args: tp.Any) -> None:
+    if args.cressman and args.stable_unstable:
+        raise RuntimeError("'cressman' and 'stable-unstable' cannot be set at the same time")
+    elif not args.cressman and not args.stable_unstable:
+        raise RuntimeError("Either 'cressman' or 'stable-unstable' must be set")
 
 
 if __name__ == "__main__":
@@ -358,8 +360,23 @@ if __name__ == "__main__":
         T = args.final_time
         dt = args.timestep
 
-        brain = get_brain(mesh_name=mesh_name, conductivity=conductivity, mesh_dir=args.mesh_dir)
-        solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
+        brain = get_brain(
+            mesh_name=mesh_name,
+            mesh_dir=args.mesh_dir,
+            unstable_tags=args.unstable_tags
+        )
+
+        if args.cressman:
+            ic_type = "cressman"
+        elif args.stable_unstable:
+            ic_type = "stable_unstable"
+        solver = get_solver(
+            brain=brain,
+            Ks=Ks,
+            Ku=Ku,
+            ic_type=ic_type,
+            unstable_tags=args.unstable_tags
+        )
 
         current_time = get_current_time_mpi()
         if df.MPI.rank(df.MPI.comm_world) == 0:
@@ -421,4 +438,5 @@ if __name__ == "__main__":
 
     parser = create_argument_parser()
     args = parser.parse_args()
+    validate_arguments(args)
     run(args)

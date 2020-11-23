@@ -20,7 +20,6 @@ from xalbrain import (
     BidomainSolver,
 )
 
-
 from extension_modules import load_module
 
 from xalbrain.cellmodels import Cressman
@@ -71,41 +70,6 @@ df.parameters["form_compiler"]["quadrature_degree"] = 3
 CONDUCTIVITY_TUPLE = namedtuple("CONDUCTIVITY_TUPLE", ["intracellular", "extracellular"])
 
 
-def grid(*, N: int, centre: tp.Sequence[float], dx: float) -> np.ndarray:
-    dim = len(centre)
-    foo = np.zeros([N]*(dim - 1) + [dim])
-
-    for i, pi in enumerate(centre):
-        foo[..., i] = np.linspace(pi - dx/2, pi + dx/2, N)
-
-    return foo.reshape(-1, dim)
-
-
-def filter_grid_points(
-    *,
-    indicator_function: df.Function,
-    centre: tp.Sequence[float],
-    N: int,
-    dx: float
-) -> tp.List[np.ndarray]:
-    _indicator = indicator_function
-    grid_points = [centre]
-
-    try:
-        _target_indicator = int(_indicator(centre))
-    except RuntimeError as e:
-        logger.info("point centre outside of domain")
-        return grid_points
-
-    for _p in grid(N=N, centre=centre, dx=dx):
-        try:
-            if _indicator(_p) == _target_indicator:
-                grid_points.append(_p)
-        except RuntimeError as e:
-            logger.info("point outisde of domain")
-    return grid_points
-
-
 def get_conductivities(
     *,
     mesh: df.Mesh,
@@ -134,7 +98,13 @@ def get_conductivities(
     return conductivity_tuple
 
 
-def get_brain(mesh_name: str, anisotropy_type: str, mesh_dir: tp.Optional[Path]):
+def get_brain(
+    *,
+    mesh_name: str,
+    anisotropy_type: str,
+    mesh_dir: tp.Optional[Path],
+    unstable_tags: tp.Sequence[int]
+) -> Model:
     time_constant = df.Constant(0)
 
     # Realistic mesh
@@ -206,10 +176,13 @@ def get_brain(mesh_name: str, anisotropy_type: str, mesh_dir: tp.Optional[Path])
         21: 1.26        # White
     }
 
+    for tag in unstable_tags:
+        ME_dict[tag] = M_e_gray
+        MI_dict[tag] = M_i_gray
+
     stimulus_dict = {
         1: df.Constant(1)
     }
-
 
     brain = Model(
         domain=mesh,
@@ -219,28 +192,28 @@ def get_brain(mesh_name: str, anisotropy_type: str, mesh_dir: tp.Optional[Path])
         cell_models=Cressman(),      # Default parameters
         cell_domains=cell_function,
         indicator_function=indicator_function,
-        stimulus=stimulus_dict
+        # stimulus=stimulus_dict
     )
     return brain
 
 
-def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolver:
+def get_solver(
+    *,
+    brain: Model,
+    Ks: float,
+    Ku: float,
+    ic_type: str,
+    unstable_tags: tp.Sequence[int]
+) -> MultiCellSplittingSolver:
     odesolver_module = load_module("LatticeODESolver")
     # Indices are in reference to indicator_function, not cell_function
     odemap = odesolver_module.ODEMap()
     odemap.add_ode(1, odesolver_module.Cressman(Ks))        # 1 --- Gray matter
-    # odemap.add_ode(2, odesolver_module.Cressman(Ku))      # 2 --- White matter
-    odemap.add_ode(11, odesolver_module.Cressman(Ku))       # 11 --- Unstable gray matter
-    # odemap.add_ode(21, odesolver_module.Cressman(Ku))     # 21 --- Unstable white matter
+    for key in unstable_tags:
+        odemap.add_ode(key, odesolver_module.Cressman(Ku))       # 11 --- Unstable gray matter
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
-
-    # # gmres
-    # ## petsc_amg, ilu,
-
-    # # bicgstab, tfqmr
-    # ## ilu
     splitting_parameters["BidomainSolver"]["algorithm"] = "gmres"
     splitting_parameters["BidomainSolver"]["preconditioner"] = "petsc_amg"
 
@@ -257,53 +230,59 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     )
 
     vs_prev, *_ = solver.solution_fields()
-    # vs_prev.assign(brain.cell_models.initial_conditions())
-    # return solver
+    if ic_type == "cressman":
+        vs_prev.assign(brain.cell_models.initial_conditions())
+        return solver
+    elif ic_type == "stable_unstable":
+        # initial conditions for `vs`
+        CSF_IC = tuple([0]*7)
 
-    # initial conditions for `vs`
-    CSF_IC = tuple([0]*7)
+        STABLE_IC = (    # stable
+            -6.70340802e+01,
+            1.18435132e-02,
+            7.03013587e-02,
+            9.78136054e-01,
+            1.49366709e-07,
+            3.95901396e+00,
+            1.78009722e+01
+        )
 
-    STABLE_IC = (    # stable
-        -6.70340802e+01,
-        1.18435132e-02,
-        7.03013587e-02,
-        9.78136054e-01,
-        1.49366709e-07,
-        3.95901396e+00,
-        1.78009722e+01
-    )
+        UNSTABLE_IC = (
+            -6.06953303e+01,
+            2.63773216e-02,
+            1.09906468e-01,
+            9.49154804e-01,
+            7.69181883e-02,
+            1.08414264e+01,
+            1.89251358e+01
+        )
 
-    UNSTABLE_IC = (
-        -6.06953303e+01,
-        2.63773216e-02,
-        1.09906468e-01,
-        9.49154804e-01,
-        7.69181883e-02,
-        1.08414264e+01,
-        1.89251358e+01
-    )
+        WHITE_IC = STABLE_IC
 
-    WHITE_IC = STABLE_IC
+        cell_model_dict = {
+            1: STABLE_IC,
+            2: WHITE_IC,
+            3: WHITE_IC,
+            4: WHITE_IC,
+            5: WHITE_IC,
+            6: WHITE_IC,
+            11: STABLE_IC,
+            21: WHITE_IC
+        }
 
-    cell_model_dict = {
-        1: STABLE_IC,
-        2: WHITE_IC,
-        3: CSF_IC,
-        4: CSF_IC,
-        5: CSF_IC,
-        6: CSF_IC,
-        11: UNSTABLE_IC,
-        21: WHITE_IC
-    }
+        for key in unstable_tags:
+            cell_model_dict[key] = UNSTABLE_IC
 
-    vs_prev.assign(
-        solve_IC(brain.mesh, brain.cell_domains, cell_model_dict, dimension=len(UNSTABLE_IC))
-    )
-
-    return solver
+        vs_prev.assign(
+            solve_IC(brain.mesh, brain.cell_domains, cell_model_dict, dimension=len(UNSTABLE_IC))
+        )
+        return solver
+    else:
+        raise RuntimeError("Unknon ic type")
 
 
 def get_saver(
+    *,
     brain: Model,
     outpath: Path,
     point_dir: tp.Optional[Path]
@@ -312,14 +291,17 @@ def get_saver(
     jobscript_path = Path("jobscript_anisotropic.slurm")
     if jobscript_path.is_file():
         sourcefiles += [str(jobscript_path)]        # not usre str() is necessary
-
     store_sourcefiles(map(Path, sourcefiles), outpath)
 
     saver_parameters = SaverSpec(casedir=outpath, overwrite_casedir=True)
     saver = Saver(saver_parameters)
     saver.store_mesh(brain.mesh, brain.cell_domains)
 
-    field_spec_checkpoint = FieldSpec(save_as=("checkpoint",), stride_timestep=400, num_steps_in_part=None)
+    field_spec_checkpoint = FieldSpec(
+        save_as=("checkpoint",),
+        stride_timestep=400,
+        num_steps_in_part=None
+    )
     saver.add_field(Field("v", field_spec_checkpoint))
     saver.add_field(Field("u", field_spec_checkpoint))
 
@@ -411,19 +393,43 @@ def create_argument_parser() -> argparse.ArgumentParser:
         default=None
     )
 
+    parser.add_argument(
+        "--cressman",
+        action="store_true",
+        help="Use standrd cressman initial conditions everywhere."
+    )
+
+    parser.add_argument(
+        "--stable-unstable",
+        action="store_true",
+        help="Use stble and unstable initial conditions."
+    )
+
+    parser.add_argument(
+        "--unstable-tags",
+        nargs="+",
+        type=int,
+        help="Cell tags of the unstable domain.",
+        required=True
+    )
+
     return parser
 
 
 def validate_arguments(args: tp.Any) -> None:
     valid_anisotropy = {"dti", "constant", "dummy"}
-    if not args.anisotropy in valid_anisotropy:
+    if args.anisotropy not in valid_anisotropy:
         raise ValueError(f"Unknown anisotropy: expects {valid_anisotropy}")
+
+    if args.cressman and args.stable_unstable:
+        raise RuntimeError("'cressman' and 'stable-unstable' cannot be set at the same time")
+    elif not args.cressman and not args.stable_unstable:
+        raise RuntimeError("Either 'cressman' or 'stable-unstable' must be set")
 
 
 if __name__ == "__main__":
     warnings.simplefilter("ignore", UserWarning)
 
-    # def run(*, Ks: float, Ku: float, mesh_name: str, dt: float, T: float, anisotropy: str) -> None:
     def run(args) -> None:
         Ks = 4
         Ku = 8
@@ -435,8 +441,24 @@ if __name__ == "__main__":
         logger.info(f"mesh name: {args.mesh_name}")
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
-        brain = get_brain(mesh_name, anisotropy, args.mesh_dir)
-        solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
+        brain = get_brain(
+            mesh_name=mesh_name,
+            anisotropy_type=anisotropy,
+            mesh_dir=args.mesh_dir,
+            unstable_tags=args.unstable_tags,
+        )
+
+        if args.cressman:
+            ic_type = "cressman"
+        elif args.stable_unstable:
+            ic_type = "stable_unstable"
+        solver = get_solver(
+            brain=brain,
+            Ks=Ks,
+            Ku=Ku,
+            ic_type=ic_type,
+            unstable_tags=args.unstable_tags
+        )
 
         if df.MPI.rank(df.MPI.comm_world) == 0:
             current_time = datetime.datetime.now()
@@ -459,7 +481,7 @@ if __name__ == "__main__":
                 "T": T,
                 "anisotropy": anisotropy
             },
-            directory_name="brain3d_head"
+            directory_name="brain3d_anisotropic_head"
         )
         store_arguments(args=args, out_path=identifier)
 
@@ -481,16 +503,11 @@ if __name__ == "__main__":
                 v, u, *_ = vur.split(deepcopy=True)
                 update_dict.update({"v": v, "u": u})
 
-            # if saver.update_this_timestep(field_names=["vs"], timestep=i, time=brain.time(0)):
-            #     update_dict.update({"vs": vs})
-
-            # if saver.update_this_timestep(field_names=["v_points", "u_points"], timestep=i, time=brain.time(0)):
             if saver.update_this_timestep(
                     field_names=point_name_list,
                     timestep=i,
                     time=brain.time(0)
             ):
-                # update_dict.update({"v_points": vs, "u_points": vs})
                 update_dict.update({_name: vs for _name in point_name_list})
 
             if len(update_dict) != 0:
@@ -503,6 +520,5 @@ if __name__ == "__main__":
 
     parser = create_argument_parser()
     args = parser.parse_args()
-
     validate_arguments(args)
     run(args)
