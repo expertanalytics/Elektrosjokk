@@ -105,15 +105,11 @@ def get_brain(
         2: 1,
         1: M_i_gray,
         3: 1e-4,
-        11: M_i_gray,
-        21: 1
     }
     ME_dict = {
         2: 1.26,
         1: M_e_gray,
         3: 17.6,
-        11: M_e_gray,
-        21: 1.26
     }
 
     for tag in unstable_tags:
@@ -197,11 +193,6 @@ def get_solver(
             1: STABLE_IC,
             2: WHITE_IC,
             3: WHITE_IC,
-            # 4: WHITE_IC,
-            # 5: WHITE_IC,
-            # 6: WHITE_IC,
-            11: STABLE_IC,
-            21: WHITE_IC
         }
 
         for key in unstable_tags:

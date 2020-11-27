@@ -146,15 +146,11 @@ def get_brain(
         1: M_i_gray,
         2: conductivity_tuple.intracellular,
         3: 1e-4,
-        11: M_i_gray,
-        21: conductivity_tuple.intracellular
     }
     Me_dict = {
         1: M_e_gray,
         2: conductivity_tuple.extracellular,
         3: 17.6,
-        11: M_e_gray,
-        21: conductivity_tuple.extracellular
     }
 
     brain = Model(
@@ -232,8 +228,6 @@ def get_solver(
             1: STABLE_IC,
             2: WHITE_IC,
             3: WHITE_IC,
-            11: STABLE_IC,
-            21: WHITE_IC
         }
 
         for key in unstable_tags:

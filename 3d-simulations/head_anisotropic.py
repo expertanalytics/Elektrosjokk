@@ -160,8 +160,6 @@ def get_brain(
         4: 1e-4,
         5: 1e-4,
         6: 1e-4,
-        11: M_i_gray,
-        21: 1           # White
     }
 
     ME_dict = {
@@ -172,8 +170,6 @@ def get_brain(
         4: skin,
         5: skull,
         6: CSF,
-        11: M_e_gray,
-        21: 1.26        # White
     }
 
     for tag in unstable_tags:
@@ -266,8 +262,6 @@ def get_solver(
             4: WHITE_IC,
             5: WHITE_IC,
             6: WHITE_IC,
-            11: STABLE_IC,
-            21: WHITE_IC
         }
 
         for key in unstable_tags:
