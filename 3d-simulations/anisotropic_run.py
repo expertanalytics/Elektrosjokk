@@ -102,7 +102,8 @@ def get_brain(
     *,
     mesh_name: str,
     anisotropy_type: str,
-    mesh_dir: tp.Optional[Path]
+    mesh_dir: tp.Optional[Path],
+    unstable_tags
 ) -> Model:
     time_constant = df.Constant(0)
 
@@ -152,6 +153,10 @@ def get_brain(
         2: conductivity_tuple.extracellular,
         3: 17.6,
     }
+
+    for tag in unstable_tags:
+        Mi_dict[tag] = M_e_gray
+        Me_dict[tag] = M_i_gray
 
     brain = Model(
         domain=mesh,
@@ -400,7 +405,12 @@ if __name__ == "__main__":
         logger.info(f"mesh name: {args.mesh_name}")
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
-        brain = get_brain(mesh_name=mesh_name, anisotropy_type=anisotropy, mesh_dir=args.mesh_dir)
+        brain = get_brain(
+            mesh_name=mesh_name,
+            anisotropy_type=anisotropy,
+            mesh_dir=args.mesh_dir,
+            unstable_tags=args.unstable_tags
+        )
         if args.cressman:
             ic_type = "cressman"
         elif args.stable_unstable:
