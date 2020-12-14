@@ -389,7 +389,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--anisotropy",     # dummy, constant, dti
-        help="The type of anisotropy. Fits the ending of a conductivity function. supported: '2d'",
+        help="The type of anisotropy. Fits the ending of a conductivity function. default to '2d'",
         type=str,
         required=False,
         default="2d"
@@ -405,12 +405,6 @@ def create_argument_parser() -> argparse.ArgumentParser:
     )
 
     return parser
-
-
-def validate_arguments(args: tp.Any) -> None:
-    valid_anisotropy = {"dti", "constant", "dummy"}
-    if not args.anisotropy in valid_anisotropy:
-        raise ValueError(f"Unknown anisotropy: expects {valid_anisotropy}")
 
 
 if __name__ == "__main__":
@@ -486,5 +480,4 @@ if __name__ == "__main__":
 
     parser = create_argument_parser()
     args = parser.parse_args()
-    # validate_arguments(args)
     run(args)
