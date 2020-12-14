@@ -34,7 +34,7 @@ from postutils import (
     get_indicator_function,
     store_arguments,
     check_bounds,
-    solve_IC,
+    solve_IC
 )
 
 from postspec import (
@@ -50,7 +50,7 @@ from postfields import (
 import logging
 
 
-LOG_FILE_NAME = "anisotropic_log"
+LOG_FILE_NAME = "isotropic_log"
 logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
 logger = logging.getLogger()
 
@@ -67,38 +67,8 @@ flags = ["-O3", "-ffast-math", "-march=native"]
 df.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
 df.parameters["form_compiler"]["quadrature_degree"] = 3
 
-CONDUCTIVITY_TUPLE = namedtuple("CONDUCTIVITY_TUPLE", ["intracellular", "extracellular"])
 
-
-def get_conductivities(
-    *,
-    mesh: df.Mesh,
-    mesh_name: str,
-    mesh_directory: Path,
-    anisotropy_type: str
-) -> tp.Tuple[df.Function, df.Function]:
-    function_space = df.TensorFunctionSpace(mesh, "DG", 0)
-    extracellular_function = df.Function(function_space)
-    intracellular_function = df.Function(function_space)
-
-    extracellular_file_name = f"{mesh_directory / mesh_name}_intracellular_conductivity_{anisotropy_type}.xdmf"
-    intracellular_file_name = f"{mesh_directory / mesh_name}_extracellular_conductivity_{anisotropy_type}.xdmf"
-
-    name = "conductivity"  #TODO: change to conductivity
-    with df.XDMFFile(str(extracellular_file_name)) as ifh:
-        ifh.read_checkpoint(extracellular_function, name, counter=0)
-
-    with df.XDMFFile(str(intracellular_file_name)) as ifh:
-        ifh.read_checkpoint(intracellular_function, name, counter=0)
-
-    conductivity_tuple = CONDUCTIVITY_TUPLE(
-        intracellular=intracellular_function,
-        extracellular=extracellular_function
-    )
-    return conductivity_tuple
-
-
-def get_brain(mesh_name: str, anisotropy_type: str, mesh_dir: Path):
+def get_brain(mesh_name: str, mesh_dir: tp.Optional[Path]):
     time_constant = df.Constant(0)
 
     # Realistic mesh
@@ -122,23 +92,14 @@ def get_brain(mesh_name: str, anisotropy_type: str, mesh_dir: Path):
     indicator_function = get_indicator_function(mesh_directory / f"{mesh_name}_indicator.xdmf", mesh)
 
     # 1 -- GM, 2 -- WM
-    conductivity_tuple = get_conductivities(
-        mesh=mesh,
-        mesh_name=mesh_name,
-        mesh_directory=mesh_directory,
-        anisotropy_type=anisotropy_type
-    )
-
     # Dougherty et. al. 2014 -- They are not explicit about the anisotropy
     # I will follow the methof from Lee et. al. 2013, but use numbers from Dougherty
     M_i_gray = 1.0      # Dougherty
+    M_i_white = 1.0      # Dougherty
 
     # Doughert et. al 2014
     M_e_gray = 2.78     # Dougherty
-    # M_e_white = 1.26    # Dougherty
-
-    # Mi_dict = {2: conductivity_tuple.intracellular, 1: M_i_gray, 3: 0},
-    # Me_dict = {2: conductivity_tuple.extracellular, 1: M_e_gray, 3: 17.6},
+    M_e_white = 1.26    # Dougherty
 
     CSF = 17.6
     SKULL = 0.1
@@ -146,15 +107,15 @@ def get_brain(mesh_name: str, anisotropy_type: str, mesh_dir: Path):
     GRAY_i = M_i_gray
 
     Mi_dict = {
-        1: conductivity_tuple.intracellular,
-        2: conductivity_tuple.intracellular,
+        1: M_i_white,
+        2: M_i_white,
         3: M_i_gray,
         4: M_i_gray,
         5: M_i_gray,
     }
     Me_dict = {
-        1: conductivity_tuple.extracellular,
-        2: conductivity_tuple.extracellular,
+        1: M_e_white,
+        2: M_e_white,
         3: M_e_gray,
         4: M_e_gray,
         5: M_e_gray,
@@ -282,8 +243,7 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
 
     # WHITE_IC = STABLE_IC
 
-    # cell_model_dict = {
-    #     1: WHITE_IC,
+    # cell_model_dict = { #     1: WHITE_IC,
     #     2: WHITE_IC,
     #     3: STABLE_IC,
     #     4: UNSTABLE_IC,
@@ -301,8 +261,8 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
     # )
     # return solver
 
-    vs_prev.assign(brain.cell_models.initial_conditions())
-    return solver
+    # vs_prev.assign(brain.cell_models.initial_conditions())
+    # return solver
 
 
 def get_saver(
@@ -310,8 +270,8 @@ def get_saver(
     outpath: Path,
     point_path_list: tp.Optional[tp.Sequence[Path]]
 ) -> tp.Tuple[Saver, tp.Sequence[str]]:
-    sourcefiles = ["anisotropic_run.py"]
-    jobscript_path = Path("jobscript_anisotropic.slurm")
+    sourcefiles = ["isotropic_run.py"]
+    jobscript_path = Path("jobscript_isotropic.slurm")
     if jobscript_path.is_file():
         sourcefiles += [str(jobscript_path)]        # not usre str() is necessary
 
@@ -365,6 +325,13 @@ def create_argument_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--mesh-dir",
+        type=Path,
+        required=False,
+        default=None
+    )
+
+    parser.add_argument(
         "-dt",
         "--timestep",
         help="The timestep dt, Given in ms.",
@@ -381,21 +348,6 @@ def create_argument_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--mesh-dir",
-        type=Path,
-        required=False,
-        default=None
-    )
-
-    parser.add_argument(
-        "--anisotropy",     # dummy, constant, dti
-        help="The type of anisotropy. Fits the ending of a conductivity function. supported: '2d'",
-        type=str,
-        required=False,
-        default="2d"
-    )
-
-    parser.add_argument(
         "--point-path",
         help="Path to the points used for PointField sampling. Has to support np.loadtxt.",
         nargs="+",
@@ -404,13 +356,19 @@ def create_argument_parser() -> argparse.ArgumentParser:
         default=None
     )
 
+    parser.add_argument(
+        "--alpha",
+        help="Steepness factor in the conductivity near the GM CSF interface.",
+        type=float,
+        required=False,
+        default=1
+    )
+
     return parser
 
 
 def validate_arguments(args: tp.Any) -> None:
-    valid_anisotropy = {"dti", "constant", "dummy"}
-    if not args.anisotropy in valid_anisotropy:
-        raise ValueError(f"Unknown anisotropy: expects {valid_anisotropy}")
+    return True
 
 
 if __name__ == "__main__":
@@ -420,14 +378,14 @@ if __name__ == "__main__":
         Ks = 4
         Ku = 8
         mesh_name = args.mesh_name
-        anisotropy = args.anisotropy
         T = args.final_time
         dt = args.timestep
 
         logger.info(f"mesh name: {args.mesh_name}")
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
-        brain = get_brain(mesh_name, anisotropy, mesh_dir=args.mesh_dir)
+
+        brain = get_brain(mesh_name, mesh_dir=args.mesh_dir)
         solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
 
         if df.MPI.rank(df.MPI.comm_world) == 0:
@@ -449,9 +407,8 @@ if __name__ == "__main__":
                 "mesh-name": mesh_name,
                 "dt": dt,
                 "T": T,
-                "anisotropy": anisotropy
             },
-            directory_name="brain2d_anisotropic"
+            directory_name="brain2d_isotropic"
         )
         store_arguments(args=args, out_path=identifier)
 
