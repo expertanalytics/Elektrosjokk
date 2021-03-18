@@ -438,7 +438,7 @@ if __name__ == "__main__":
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
         brain = get_brain(mesh_name, anisotropy, mesh_dir=args.mesh_dir)
-        solver = get_solver(brain=brain, Ks=Ks, Ku=Ku)
+        solver = get_solver(brain=brain, Ks=Ks, Ku=Ku, synaptic=args.synaptic)
 
         if df.MPI.rank(df.MPI.comm_world) == 0:
             current_time = datetime.datetime.now()

@@ -258,7 +258,7 @@ def get_solver(
         )
 
         if synaptic:
-            WHITE_IC = [0]*3                    # voltage + 2 state variables
+            WHITE_IC = [0]*7                    # voltage + 2 state variables
             WHITE_IC[0] = -6.06953303e+01       # Voltage
             WHITE_IC[1] = 0                     # Hmm
             WHITE_IC[2] = 0                     # Hmmmm
