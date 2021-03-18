@@ -95,11 +95,15 @@ def get_brain(mesh_name: str, mesh_dir: tp.Optional[Path]):
     # Dougherty et. al. 2014 -- They are not explicit about the anisotropy
     # I will follow the methof from Lee et. al. 2013, but use numbers from Dougherty
     M_i_gray = 1.0      # Dougherty
-    M_i_white = 1.0      # Dougherty
+    # M_i_white = 1.0      # Dougherty
+    M_i_white = 5.5     # Dougherty
+    logger.info(f"Mi white: {M_i_white}")
 
     # Doughert et. al 2014
     M_e_gray = 2.78     # Dougherty
     M_e_white = 1.26    # Dougherty
+    M_e_white = 5.5    # Dougherty
+    logger.info(f"Me white: {M_e_white}")
 
     CSF = 17.6
     SKULL = 0.1

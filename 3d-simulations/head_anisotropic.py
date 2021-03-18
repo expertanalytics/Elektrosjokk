@@ -199,7 +199,8 @@ def get_solver(
     Ks: float,
     Ku: float,
     ic_type: str,
-    unstable_tags: tp.Sequence[int]
+    unstable_tags: tp.Sequence[int],
+    synaptic: bool
 ) -> MultiCellSplittingSolver:
     odesolver_module = load_module("LatticeODESolver")
     # Indices are in reference to indicator_function, not cell_function
@@ -207,6 +208,9 @@ def get_solver(
     odemap.add_ode(1, odesolver_module.Cressman(Ks))        # 1 --- Gray matter
     for key in unstable_tags:
         odemap.add_ode(key, odesolver_module.Cressman(Ku))       # 11 --- Unstable gray matter
+
+    if synaptic:
+        odemap.add_ode(2, odesolver_module.Synaptic())
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
@@ -253,15 +257,21 @@ def get_solver(
             1.89251358e+01
         )
 
-        WHITE_IC = STABLE_IC
+        if synaptic:
+            WHITE_IC = [0]*3                    # voltage + 2 state variables
+            WHITE_IC[0] = -6.06953303e+01       # Voltage
+            WHITE_IC[1] = 0                     # Hmm
+            WHITE_IC[2] = 0                     # Hmmmm
+        else:
+            WHITE_IC = STABLE_IC
 
         cell_model_dict = {
             1: STABLE_IC,
             2: WHITE_IC,
-            3: WHITE_IC,
-            4: WHITE_IC,
-            5: WHITE_IC,
-            6: WHITE_IC,
+            3: STABLE_IC,
+            4: STABLE_IC,
+            5: STABLE_IC,
+            6: STABLE_IC,
         }
 
         for key in unstable_tags:
@@ -407,6 +417,12 @@ def create_argument_parser() -> argparse.ArgumentParser:
         required=True
     )
 
+    parser.add_argument(
+        "--synaptic",
+        action="store_true",
+        help="Use a passive synaptic model in the white matter."
+    )
+
     return parser
 
 
@@ -451,7 +467,8 @@ if __name__ == "__main__":
             Ks=Ks,
             Ku=Ku,
             ic_type=ic_type,
-            unstable_tags=args.unstable_tags
+            unstable_tags=args.unstable_tags,
+            synaptic=args.synaptic
         )
 
         if df.MPI.rank(df.MPI.comm_world) == 0:
