@@ -181,12 +181,16 @@ def get_brain(mesh_name: str, anisotropy_type: str, mesh_dir: Path):
     return brain
 
 
-def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolver:
+def get_solver(*, brain: Model, Ks: float, Ku: float, synaptic: bool) -> MultiCellSplittingSolver:
     odesolver_module = load_module("LatticeODESolver")
     odemap = odesolver_module.ODEMap()
     odemap.add_ode(30, odesolver_module.Cressman(Ks))        # 3 --- Gray matter -- stable
     odemap.add_ode(40, odesolver_module.Cressman(Ku))        # 4 --- Gray matter -- unstable
     odemap.add_ode(50, odesolver_module.Cressman(Ks))        # 5 --- Gray matter -- stable
+
+    if synaptic:
+        odemap.add_ode(10, odesolver_module.Synaptic())     # Left white matter
+        # odemap.add_ode(20, odesolver_module.Synaptic())     # Right white matter
 
     # splitting_parameters = SplittingSolver.default_parameters()
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
@@ -237,7 +241,13 @@ def get_solver(*, brain: Model, Ks: float, Ku: float) -> MultiCellSplittingSolve
         1.89251358e+01
     )
 
-    WHITE_IC = STABLE_IC
+    if synaptic:
+        WHITE_IC = [0]*7                    # voltage + 2 state variables
+        WHITE_IC[0] = -6.06953303e+01       # Voltage
+        WHITE_IC[1] = 0                     # Hmm
+        WHITE_IC[2] = 0                     # Hmmmm
+    else:
+        WHITE_IC = STABLE_IC
 
     cell_model_dict = {
         1: WHITE_IC,
@@ -402,6 +412,12 @@ def create_argument_parser() -> argparse.ArgumentParser:
         type=Path,
         required=False,
         default=None
+    )
+
+    parser.add_argument(
+        "--synaptic",
+        action="store_true",
+        help="Use a passive synaptic model in the white matter."
     )
 
     return parser
