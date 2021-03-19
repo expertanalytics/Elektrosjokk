@@ -149,13 +149,13 @@ def get_brain(mesh_name: str, mesh_dir: tp.Optional[Path]):
 def get_solver(*, brain: Model, Ks: float, Ku: float, synaptic: bool) -> MultiCellSplittingSolver:
     odesolver_module = load_module("LatticeODESolver")
     odemap = odesolver_module.ODEMap()
-    odemap.add_ode(30, odesolver_module.Cressman(Ks))        # 3 --- Gray matter -- stable
-    odemap.add_ode(40, odesolver_module.Cressman(Ku))        # 4 --- Gray matter -- unstable
-    odemap.add_ode(50, odesolver_module.Cressman(Ks))        # 5 --- Gray matter -- stable
+    odemap.add_ode(3, odesolver_module.Cressman(Ks))        # 3 --- Gray matter -- stable
+    odemap.add_ode(4, odesolver_module.Cressman(Ku))        # 4 --- Gray matter -- unstable
+    odemap.add_ode(5, odesolver_module.Cressman(Ks))        # 5 --- Gray matter -- stable
 
     if synaptic:
-        odemap.add_ode(10, odesolver_module.Synaptic())     # Left white matter
-        # odemap.add_ode(20, odesolver_module.Synaptic())     # Right white matter
+        odemap.add_ode(1, odesolver_module.Synaptic())     # Left white matter
+        # odemap.add_ode(2, odesolver_module.Synaptic())     # Right white matter
 
     # splitting_parameters = SplittingSolver.default_parameters()
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
