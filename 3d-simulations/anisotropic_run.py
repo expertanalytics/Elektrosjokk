@@ -241,6 +241,11 @@ def get_solver(
         vs_prev.assign(
             solve_IC(brain.mesh, brain.cell_domains, cell_model_dict, dimension=len(UNSTABLE_IC))
         )
+
+        with df.XDMFFile("ictest.xdmf") as xdmffile:
+            xdmffile.write(vs_prev)
+        assert False, "test ic"
+
         return solver
     else:
         raise RuntimeError("Unknon ic type")

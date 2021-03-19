@@ -384,6 +384,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Use a passive synaptic model in the white matter."
     )
 
+    return parser
+
 
 def validate_arguments(args: tp.Any) -> None:
     return True
