@@ -437,7 +437,8 @@ if __name__ == "__main__":
             Ku=Ku,
             ic_type=ic_type,
             unstable_tags=args.unstable_tags,
-            synaptic=args.synaptic
+            synaptic=args.synaptic,
+            cressman_white=args.cressman_white
         )
 
         if df.MPI.rank(df.MPI.comm_world) == 0:
