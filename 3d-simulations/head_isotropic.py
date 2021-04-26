@@ -168,7 +168,8 @@ def get_solver(
     Ku: float,
     ic_type: str,
     unstable_tags: tp.Sequence[int],
-    synaptic: bool
+    synaptic: bool,
+    cressman_white: bool
 ) -> MultiCellSplittingSolver:
     odesolver_module = load_module("LatticeODESolver")
     # Indices are in reference to indicator_function, not cell_function
@@ -178,6 +179,9 @@ def get_solver(
         odemap.add_ode(key, odesolver_module.Cressman(Ku))       # 11 --- Unstable gray matter
 
     if synaptic:
+        odemap.add_ode(2, odesolver_module.Synaptic())
+
+    if cressman_white:
         odemap.add_ode(2, odesolver_module.Synaptic())
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
@@ -237,7 +241,7 @@ def get_solver(
             WHITE_IC[1] = 0                     # Hmm
             WHITE_IC[2] = 0                     # Hmmmm
         else:
-            WHITE_IC = STABLE_IC
+            WHITE_IC = STABLE_IC        # This also works for `cressman_white`
 
         cell_model_dict = {
             1: STABLE_IC,
@@ -388,6 +392,12 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Use a passive synaptic model in the white matter."
     )
 
+    parser.add_argument(
+        "--cressman-white",
+        action="store_true",
+        help="Use the passive cressman model in the white matter"
+    )
+
     return parser
 
 
@@ -396,6 +406,9 @@ def validate_arguments(args: tp.Any) -> None:
         raise RuntimeError("'cressman' and 'stable-unstable' cannot be set at the same time")
     elif not args.cressman and not args.stable_unstable:
         raise RuntimeError("Either 'cressman' or 'stable-unstable' must be set")
+
+    if args.cressman_white and args.synaptic:
+        raise RuntimeError("Cannot have both `synaptic` and `cressman_white` as white cell model")
 
 
 if __name__ == "__main__":

@@ -200,7 +200,8 @@ def get_solver(
     Ku: float,
     ic_type: str,
     unstable_tags: tp.Sequence[int],
-    synaptic: bool
+    synaptic: bool,
+    cressman_white: bool
 ) -> MultiCellSplittingSolver:
     odesolver_module = load_module("LatticeODESolver")
     # Indices are in reference to indicator_function, not cell_function
@@ -211,6 +212,9 @@ def get_solver(
 
     if synaptic:
         odemap.add_ode(2, odesolver_module.Synaptic())
+
+    if cressman_white:
+        odemap.add_ode(2, odesolver_module.Cressman(4))
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
@@ -237,7 +241,7 @@ def get_solver(
         # initial conditions for `vs`
         CSF_IC = tuple([0]*7)
 
-        STABLE_IC = (    # stable
+        STABLE_IC = [    # stable
             -6.70340802e+01,
             1.18435132e-02,
             7.03013587e-02,
@@ -245,9 +249,9 @@ def get_solver(
             1.49366709e-07,
             3.95901396e+00,
             1.78009722e+01
-        )
+        ]
 
-        UNSTABLE_IC = (
+        UNSTABLE_IC = [
             -6.06953303e+01,
             2.63773216e-02,
             1.09906468e-01,
@@ -255,15 +259,14 @@ def get_solver(
             7.69181883e-02,
             1.08414264e+01,
             1.89251358e+01
-        )
+        ]
 
+        WHITE_IC = STABLE_IC        # This also works for `cressman_white`
         if synaptic:
-            WHITE_IC = [0]*7                    # voltage + 2 state variables
+            # WHITE_IC = [0]*7                    # voltage + 2 state variables
             WHITE_IC[0] = -6.06953303e+01       # Voltage
             WHITE_IC[1] = 0                     # Hmm
             WHITE_IC[2] = 0                     # Hmmmm
-        else:
-            WHITE_IC = STABLE_IC
 
         cell_model_dict = {
             1: STABLE_IC,
@@ -423,6 +426,12 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Use a passive synaptic model in the white matter."
     )
 
+    parser.add_argument(
+        "--cressman-white",
+        action="store_true",
+        help="Use the passive cressman model in the white matter"
+    )
+
     return parser
 
 
@@ -435,6 +444,9 @@ def validate_arguments(args: tp.Any) -> None:
         raise RuntimeError("'cressman' and 'stable-unstable' cannot be set at the same time")
     elif not args.cressman and not args.stable_unstable:
         raise RuntimeError("Either 'cressman' or 'stable-unstable' must be set")
+
+    if args.cressman_white and args.synaptic:
+        raise RuntimeError("Cannot have both `synaptic` and `cressman_white` as white cell model")
 
 
 if __name__ == "__main__":
@@ -468,7 +480,8 @@ if __name__ == "__main__":
             Ku=Ku,
             ic_type=ic_type,
             unstable_tags=args.unstable_tags,
-            synaptic=args.synaptic
+            synaptic=args.synaptic,
+            cressman_white=args.cressman_white
         )
 
         if df.MPI.rank(df.MPI.comm_world) == 0:

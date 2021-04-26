@@ -135,13 +135,17 @@ def get_solver(
     Ks: float,
     Ku: float,
     ic_type: str,
-    unstable_tags: tp.Sequence[int]
+    unstable_tags: tp.Sequence[int],
+    cressman_white: bool
 ) -> MultiCellSplittingSolver:
     odesolver_module = load_module("LatticeODESolver")
     odemap = odesolver_module.ODEMap()
     odemap.add_ode(1, odesolver_module.Cressman(Ks))        # 1 --- Gray matter
     for key in unstable_tags:
         odemap.add_ode(key, odesolver_module.Cressman(Ku))
+
+    if cressman_white:
+        odemap.add_ode(2, odesolver_module.Cressman(Ks))        # 2 --- White matter
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     # cg, petsc_amg runs on saga
@@ -187,7 +191,7 @@ def get_solver(
             1.89251358e+01
         )
 
-        WHITE_IC = STABLE_IC
+        WHITE_IC = STABLE_IC        # This alkso works for `cressman_white`
 
         cell_model_dict = {
             1: STABLE_IC,
@@ -366,7 +370,8 @@ if __name__ == "__main__":
             Ks=Ks,
             Ku=Ku,
             ic_type=ic_type,
-            unstable_tags=args.unstable_tags
+            unstable_tags=args.unstable_tags,
+            cressman_white=args.cressman_white
         )
 
         current_time = get_current_time_mpi()
