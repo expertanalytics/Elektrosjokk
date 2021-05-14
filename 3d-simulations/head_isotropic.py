@@ -116,10 +116,6 @@ def get_brain(
     skull = 0.1
     skin = 4.3
 
-    # CSF = 1e-4
-    # skull = 1e-4
-    # skin = 1e-4
-
     MI_dict = {
         # 2: conductivity_tuple.intracellular,
         2: 1,

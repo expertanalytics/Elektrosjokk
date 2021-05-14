@@ -144,13 +144,9 @@ def get_brain(
     # M_e_white = 1.26    # Dougherty
 
     # From "A guideline for head volume conductor modeling in EEG and MEG -- Vorwerk et. al 2014"
-    # CSF = 17.6
-    # skull = 0.1
-    # skin = 4.3
-
-    CSF = 1.0
-    skull = 1.0
-    skin = 1.0
+    CSF = 17.6
+    skull = 0.1
+    skin = 4.3
 
     MI_dict = {
         # 2: conductivity_tuple.intracellular,
