@@ -181,16 +181,26 @@ def get_brain(mesh_name: str, anisotropy_type: str, mesh_dir: Path):
     return brain
 
 
-def get_solver(*, brain: Model, Ks: float, Ku: float, synaptic: bool) -> MultiCellSplittingSolver:
+def get_solver(
+    *,
+    brain: Model,
+    Ks: float,
+    Ku: float,
+    synaptic: bool,
+    cressman_white: bool
+) -> MultiCellSplittingSolver:
     odesolver_module = load_module("LatticeODESolver")
     odemap = odesolver_module.ODEMap()
-    odemap.add_ode(30, odesolver_module.Cressman(Ks))        # 3 --- Gray matter -- stable
-    odemap.add_ode(40, odesolver_module.Cressman(Ku))        # 4 --- Gray matter -- unstable
-    odemap.add_ode(50, odesolver_module.Cressman(Ks))        # 5 --- Gray matter -- stable
+    odemap.add_ode(3, odesolver_module.Cressman(Ks))        # 3 --- Gray matter -- stable
+    odemap.add_ode(4, odesolver_module.Cressman(Ku))        # 4 --- Gray matter -- unstable
+    odemap.add_ode(5, odesolver_module.Cressman(Ks))        # 5 --- Gray matter -- stable
 
     if synaptic:
-        odemap.add_ode(10, odesolver_module.Synaptic())     # Left white matter
-        # odemap.add_ode(20, odesolver_module.Synaptic())     # Right white matter
+        odemap.add_ode(1, odesolver_module.Synaptic())     # Left white matter
+
+    if cressman_white:
+        odemap.add_ode(1, odesolver_module.Cressman(Ks))
+        odemap.add_ode(2, odesolver_module.Cressman(Ks))
 
     # splitting_parameters = SplittingSolver.default_parameters()
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
@@ -420,6 +430,12 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Use a passive synaptic model in the white matter."
     )
 
+    parser.add_argument(
+        "--cressman-white",
+        action="store_true",
+        help="Use the passive cressman model in the white matter"
+    )
+
     return parser
 
 
@@ -438,7 +454,13 @@ if __name__ == "__main__":
         logger.info(f"Ks: {Ks}")
         logger.info(f"Ku: {Ku}")
         brain = get_brain(mesh_name, anisotropy, mesh_dir=args.mesh_dir)
-        solver = get_solver(brain=brain, Ks=Ks, Ku=Ku, synaptic=args.synaptic)
+        solver = get_solver(
+            brain=brain,
+            Ks=Ks,
+            Ku=Ku,
+            synaptic=args.synaptic,
+            cressman_white=args.cressman_white
+        )
 
         if df.MPI.rank(df.MPI.comm_world) == 0:
             current_time = datetime.datetime.now()
