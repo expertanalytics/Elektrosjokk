@@ -178,7 +178,7 @@ def get_solver(
         odemap.add_ode(2, odesolver_module.Synaptic())
 
     if cressman_white:
-        odemap.add_ode(2, odesolver_module.Synaptic())
+        odemap.add_ode(2, odesolver_module.Cressman(Ks))
 
     splitting_parameters = MultiCellSplittingSolver.default_parameters()
     splitting_parameters["BidomainSolver"]["linear_solver_type"] = "iterative"
