@@ -95,7 +95,7 @@ def get_brain(
             mesh_directory = Path("meshes")
         logger.info(f"Using mesh directory {mesh_directory}")
 
-    mesh, cell_function, _ = get_mesh(mesh_directory, mesh_name)
+    mesh, cell_function, facet_function = get_mesh(mesh_directory, mesh_name)
     mesh.coordinates()[:] /= 10
     indicator_function = get_indicator_function(
         mesh_directory / f"{mesh_name}_indicator.xdmf",
@@ -152,7 +152,7 @@ def get_brain(
         cell_models=Cressman(),      # Default parameters
         cell_domains=cell_function,
         indicator_function=indicator_function,
-        # stimulus=stimulus_dict
+        facet_domains=facet_function
     )
     return brain
 
@@ -273,7 +273,7 @@ def get_saver(
 
     saver_parameters = SaverSpec(casedir=outpath, overwrite_casedir=True)
     saver = Saver(saver_parameters)
-    saver.store_mesh(brain.mesh, brain.cell_domains)
+    saver.store_mesh(brain.mesh, brain.cell_domains, brain.facet_domains)
 
     field_spec_checkpoint = FieldSpec(
         save_as=("checkpoint",),
